@@ -11,6 +11,8 @@ import {
   INNER_RING_ORDER,
   MIDDLE_RING_ORDER,
   OUTER_RING_ORDER,
+  PUZZLE_INTRO_BODY,
+  PUZZLE_INTRO_TITLE,
   PUZZLE_ROUNDS,
   ROUND_INTRO_BUTTON_LABEL,
   labelFor,
@@ -43,7 +45,8 @@ interface RingRuntime {
 
 /**
  * Explicit puzzle phases, one at a time:
- * - ROUND_INTRO: the round's popup is open; rings/crystal fully inert.
+ * - ROUND_INTRO: the one-time puzzle-intro popup is open (round 1 only);
+ *   rings/crystal fully inert. Never re-entered for rounds 2/3.
  * - ALIGNING_RINGS: rings/crystal interactive — the only state either can be used in.
  * - CHECKING: the instant the crystal was clicked, before the
  *   correct/duplicate/incorrect branch is dispatched — mainly a re-entrancy guard.
@@ -55,8 +58,9 @@ interface RingRuntime {
  *   already solved; brief amber vibration + a distinct message, then
  *   back to ALIGNING_RINGS.
  * - ROUND_TRANSITION: success message showing; next round is prepared
- *   behind the scenes, then either the next ROUND_INTRO opens or, on the
- *   final round, COMPLETED begins.
+ *   behind the scenes (rings rotated to a fresh arrangement), then
+ *   interaction re-enables directly into ALIGNING_RINGS — no popup — or,
+ *   on the final round, COMPLETED begins instead.
  * - COMPLETED: final, permanent — all interaction locked.
  */
 type PuzzleState =
@@ -304,9 +308,10 @@ const ROUND_TRANSITION_DELAY_MS = 1500;
  * The Pink Crystal equivalence puzzle: three independently-rotating
  * stone rings (fraction / decimal / percent) around the crystal — the
  * crystal itself is the submit control — a fixed top marker, a floating
- * crystal-code panel, and a per-round intro popup, driving a 3-round
- * sequence (PUZZLE_ROUNDS) that automatically places one digit of the
- * code per correct round and ends in a completion reward. Functional
+ * crystal-code panel, and a single one-time intro popup shown only
+ * before round 1, driving a 3-round sequence (PUZZLE_ROUNDS) that
+ * automatically places one digit of the code per correct round and ends
+ * in a completion reward. Functional
  * prototype — no full question bank or room completion beyond this one
  * sequence. Ring/panel/reward textures are procedural Phaser Graphics/
  * canvas (no suitable assets exist in the project), isolated in their
@@ -340,7 +345,7 @@ export default class EquivalencePuzzle {
   private roundIntroPopup: RoundIntroPopup;
   private feedbackPopup: FeedbackPopup;
   private hintTimer?: Phaser.Time.TimerEvent;
-  /** Whether the inactivity hint has already shown once this round — gates the delay tier (HINT_DELAY_MS vs. the much longer HINT_REPEAT_DELAY_MS), reset only when a new round's intro opens. */
+  /** Whether the inactivity hint has already shown once this round — gates the delay tier (HINT_DELAY_MS vs. the much longer HINT_REPEAT_DELAY_MS), reset at the start of every round (the intro popup for round 1, advanceToNextPuzzleRound() for rounds 2/3). */
   private hintShownThisRound = false;
 
   private rewardSymbol?: Phaser.GameObjects.Image;
@@ -372,7 +377,10 @@ export default class EquivalencePuzzle {
   constructor(scene: Phaser.Scene, crystal: PinkCrystal) {
     this.scene = scene;
     this.crystal = crystal;
-    this.roundIntroPopup = new RoundIntroPopup(scene);
+    // 'compact' — this popup only ever shows one short, fixed explanation
+    // once, before round 1; it no longer needs the larger frame sized for
+    // per-round copy.
+    this.roundIntroPopup = new RoundIntroPopup(scene, 'compact');
     this.roundIntroPopup.onConfirm = () => this.onRoundIntroConfirmed();
     this.feedbackPopup = new FeedbackPopup(scene);
   }
@@ -395,12 +403,12 @@ export default class EquivalencePuzzle {
     this.setSlotActive(0);
   }
 
-  /** Called once the room's own entry transition has settled — begins the puzzle with round 1's intro popup. No-op if the puzzle was already restored as completed. */
+  /** Called once the room's own entry transition has settled — begins the puzzle with the one-time intro popup (never shown again for rounds 2/3). No-op if the puzzle was already restored as completed. */
   beginPuzzle(): void {
     if (this.state === 'COMPLETED') {
       return;
     }
-    this.showCurrentRoundIntro();
+    this.showIntroPopup();
   }
 
   /**
@@ -1300,17 +1308,20 @@ export default class EquivalencePuzzle {
 
   // Prepares the next round — rotates the rings to a fresh, not-already-
   // solved arrangement (real dial-turning left to do, and the reset
-  // reads as deliberate rather than a leftover position), clears the
-  // instruction text, then opens that round's intro popup. Rings/crystal
-  // stay locked (ROUND_INTRO) until the popup's own button is clicked —
-  // see onRoundIntroConfirmed() — so the next round never begins before
-  // the previous digit was placed correctly.
+  // reads as deliberate rather than a leftover position), then re-enables
+  // interaction directly: no per-round intro popup exists any more (that
+  // one-time explanation only ever shows before round 1 — see
+  // showIntroPopup()/beginPuzzle()).
   private advanceToNextPuzzleRound(): void {
     this.currentRoundIndex++;
     this.rotateRingsToUnsolvedArrangement();
     this.setSlotActive(this.currentRoundIndex);
     this.setInstructionText('');
-    this.showCurrentRoundIntro();
+    this.state = 'ALIGNING_RINGS';
+    // A fresh round gets its own first-tier hint delay again.
+    this.hintShownThisRound = false;
+    this.setPuzzleInputActive(true);
+    this.scheduleHintTimer();
   }
 
   // Snaps each ring to a random one of its 4 positions, re-rolling if the
@@ -1346,21 +1357,19 @@ export default class EquivalencePuzzle {
     }
   }
 
-  // ---- round intro popup ------------------------------------------------
+  // ---- intro popup ------------------------------------------------------
 
-  private showCurrentRoundIntro(): void {
-    const round = this.rounds[this.currentRoundIndex];
-    if (!round) {
-      return;
-    }
+  // Shown exactly once, before round 1 — "one general explanation," not a
+  // per-round popup. Rounds 2/3 never call this again; see
+  // advanceToNextPuzzleRound().
+  private showIntroPopup(): void {
     this.state = 'ROUND_INTRO';
     this.cancelHintTimer();
     this.feedbackPopup.dismissImmediately();
-    // A fresh round gets its own first-tier hint delay again.
     this.hintShownThisRound = false;
     this.roundIntroPopup.show({
-      title: round.introTitle,
-      body: round.introBody,
+      title: PUZZLE_INTRO_TITLE,
+      body: PUZZLE_INTRO_BODY,
       buttonLabel: ROUND_INTRO_BUTTON_LABEL,
     });
   }

@@ -40,14 +40,16 @@ export interface RoundDefinition {
    * EquivalencePuzzle.checkCurrentAlignment().
    */
   digit: number;
-  /** Round-intro popup content, shown before the player can touch the rings. */
-  introTitle: string;
-  introBody: string;
   /** Shown briefly after the digit is placed, before the next round begins (or, on the last round, before completion). */
   successMessage: string;
 }
 
-// The button label is identical across all three rounds' intro popups.
+// Shown exactly once, before the first round — there is no longer a
+// separate intro popup per round (rounds 2 and 3 go straight from
+// correct-feedback into the next arrangement with no popup in between).
+export const PUZZLE_INTRO_TITLE = 'חידת טבעות השוויון';
+export const PUZZLE_INTRO_BODY =
+  'לפניכם 3 חידות.\nבכל חידה סובבו את שלוש הטבעות כך ששבר, מספר עשרוני ואחוז בעלי אותו ערך יופיעו מתחת לסמן.\nכאשר מצאתם התאמה, לחצו על הגביש לבדיקה.';
 export const ROUND_INTRO_BUTTON_LABEL = 'מתחילים';
 
 // The three required rounds, in order, each revealing one digit of the
@@ -58,26 +60,9 @@ export const ROUND_INTRO_BUTTON_LABEL = 'מתחילים';
 // any order; the fourth stays on the rings as a still-valid but unneeded
 // extra option.
 export const PUZZLE_ROUNDS: RoundDefinition[] = [
-  {
-    digit: 7,
-    introTitle: 'חידה 1',
-    introBody: 'חברו בין שבר, מספר עשרוני ואחוז בעלי אותו ערך.\nסובבו את הטבעות, וכשתסיימו לחצו על הגביש הזוהר.',
-    successMessage: 'מצוין! נפתחה הספרה הראשונה.',
-  },
-  {
-    digit: 3,
-    introTitle: 'חידה 2',
-    introBody:
-      'מצאו התאמה חדשה בין שבר, מספר עשרוני ואחוז בעלי אותו ערך.\nסובבו את הטבעות, וכשתסיימו לחצו על הגביש הזוהר.',
-    successMessage: 'מעולה! נפתחה הספרה השנייה.',
-  },
-  {
-    digit: 5,
-    introTitle: 'חידה 3',
-    introBody:
-      'זו החידה האחרונה.\nהתאימו בין שבר, מספר עשרוני ואחוז בעלי אותו ערך, וכשתסיימו לחצו על הגביש הזוהר.',
-    successMessage: 'הקוד הושלם.',
-  },
+  { digit: 7, successMessage: 'מצוין! נפתחה הספרה הראשונה.' },
+  { digit: 3, successMessage: 'מעולה! נפתחה הספרה השנייה.' },
+  { digit: 5, successMessage: 'הקוד הושלם.' },
 ];
 
 export function labelFor(kind: RingKind, groupId: string): string {

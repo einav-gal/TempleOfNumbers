@@ -39,8 +39,8 @@ const BODY_TEXT = [
 ].join('\n');
 
 const BUTTON_TEXT = 'כניסה למקדש';
-const BUTTON_WIDTH = 130;
-const BUTTON_HEIGHT = 40;
+const BUTTON_WIDTH = 190;
+const BUTTON_HEIGHT = 56;
 
 const DIVIDER_WIDTH_RATIO = 0.5;
 
@@ -211,11 +211,11 @@ export default class IntroOverlay {
     this.bodyText = this.scene.add
       .text(0, 0, BODY_TEXT, {
         fontFamily: FONT_FAMILY,
-        fontSize: '18px',
+        fontSize: '22px',
         color: '#ece0c4',
         align: 'center',
         rtl: true,
-        lineSpacing: 18,
+        lineSpacing: 6,
         shadow: { offsetX: 0, offsetY: 1, color: '#000000', blur: 2, fill: true },
       })
       .setOrigin(0.5);
@@ -225,7 +225,7 @@ export default class IntroOverlay {
     this.buttonLabel = this.scene.add
       .text(0, 0, BUTTON_TEXT, {
         fontFamily: FONT_FAMILY,
-        fontSize: '16px',
+        fontSize: '22px',
         color: '#f0dfa8',
         rtl: true,
       })

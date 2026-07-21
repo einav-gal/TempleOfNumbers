@@ -82,13 +82,18 @@ export default class LibraRoomScene extends Phaser.Scene {
       .setAlpha(ENTRY_START_OVERLAY_ALPHA)
       .setScrollFactor(0);
 
-    // The three-question balance puzzle. Locked/inert until the puzzle
+    // The five-question balance puzzle. Locked/inert until the puzzle
     // is actually complete — the exit only becomes clickable via
     // onCompleted below (or immediately, if already completed on a
     // previous visit).
     this.puzzle = new LibraPuzzle(this);
     this.puzzle.createLibraPuzzle(PUZZLE_DEPTH);
-    this.puzzle.onCompleted = () => this.exit?.setActive(true);
+    this.puzzle.onCompleted = () => {
+      this.exit?.setActive(true);
+      // "Make it obvious the doorway must now be clicked" — stops itself
+      // automatically the instant the player actually clicks it.
+      this.exit?.startAttentionPulse();
+    };
 
     // Persistent cross-scene crystal pouch — reads shared state fresh
     // every time this scene is created, never local Scene state.
@@ -99,6 +104,9 @@ export default class LibraRoomScene extends Phaser.Scene {
     if (getLibraRoomState(this.registry).completed) {
       this.puzzle.restoreCompleted();
       this.exit.setActive(true);
+      // "On re-entry after completion, the doorway must already be
+      // unlocked and glowing" — no animation replay, just already active.
+      this.exit.startAttentionPulse();
     } else {
       this.exit.setActive(false);
     }

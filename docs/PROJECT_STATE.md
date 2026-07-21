@@ -2137,3 +2137,222 @@ with `libraFloorEntranceOpen` already set jumps straight to the fully-
 open visual state (seal hidden, hole visible, zone interactive) with no
 animation replayed, confirming the "preserve state, don't replay
 activation" requirement end-to-end.
+
+### Intro overlay — readability pass (completed)
+
+Body text was hard to read and the entry button felt small. In
+`IntroOverlay.ts` only: body font `18px→22px`; body `lineSpacing`
+`18→6` (this one value governs the blank-line paragraph gaps in the
+Hebrew copy, so tightening it actually shrank the total body block
+despite the larger font — measured ~366px vs. an estimated ~488px
+before); button `130×40px→190×56px` with label font `16px→22px` (the
+button's hit-rectangle and drawing already derive from the same
+`BUTTON_WIDTH`/`BUTTON_HEIGHT` constants, so both grew together with no
+separate edit). Panel height is already computed dynamically from the
+actual text/button extents, so it kept fitting without a manual resize.
+Text content, colors, panel ornaments, torches, and RTL alignment are
+all unchanged; no other scene or game-logic file was touched.
+
+Verified via a temporary `window.__game` exposure (reverted after,
+confirmed clean by a final `tsc`/`build` pass): at 1366×768 the panel is
+~624px tall with ~72px clear top/bottom; re-checked at a tighter
+1280×700/640 via direct `IntroOverlay.layout()` calls — still fits with
+no clipping. `npx tsc --noEmit` and `npm run build` both pass.
+
+### Pink Room puzzle — single intro popup, direct round flow (completed)
+
+Replaced the equivalence puzzle's per-round intro popups with one
+compact, general Hebrew explanation shown only once (before round 1);
+rounds 2 and 3 now begin immediately after each correct answer, with no
+popup in between.
+
+`equivalenceData.ts`: removed `introTitle`/`introBody` from
+`RoundDefinition`/`PUZZLE_ROUNDS`; added `PUZZLE_INTRO_TITLE`/
+`PUZZLE_INTRO_BODY` (the one shared explanation; `ROUND_INTRO_BUTTON_LABEL`
+unchanged). `EquivalencePuzzle.ts`: `beginPuzzle()` shows the general
+popup once (renamed `showIntroPopup()`); `advanceToNextPuzzleRound()` —
+run after every correct answer's feedback + digit reveal/flight/lock-in —
+no longer opens a popup at all, going straight from rotating the rings to
+a fresh unsolved arrangement into `state = 'ALIGNING_RINGS'` with
+interaction re-enabled. Duplicate-detection, "any valid unsolved group is
+accepted," completion, the pink-slot crystal reward, the code panel, and
+exit unlocking are all untouched.
+
+`RoundIntroPopup.ts` (shared with the Libra Room's own one-time
+room-intro) gained a `variant: 'default' | 'compact'` constructor param —
+`'default'` is byte-for-byte the original sizing (so `LibraPuzzle.ts`'s
+existing call site is unaffected), `'compact'` (used only by
+`EquivalencePuzzle.ts` now) is a smaller frame (560×560→420×300) with
+smaller fonts/gaps and its own suffixed texture keys, so the two variants
+never collide in the shared texture cache.
+
+`npx tsc --noEmit` and `npm run build` both pass. Verified live via a
+temporary `window.__game` exposure (reverted after, confirmed clean by a
+final `tsc`/`build` pass): the compact popup renders the exact required
+title/body/button text on the `-compact` texture with the button ~74px
+clear of the frame's bottom edge; simulating a correct round-1 answer via
+`advanceToNextPuzzleRound()` confirmed the state goes straight to
+`ALIGNING_RINGS` with the popup staying closed and rings/crystal already
+interactive for round 2.
+
+### Libra Room — fixed 5-question sequence, exit attention glow (completed)
+
+Replaced the Libra Room's random 10-question pool (3 correct needed, any
+wrong question permanently skipped) with a fixed, ordered sequence of
+exactly 5 order-of-operations questions (`5×4+3=23`, `2+1×0=2`,
+`4÷2+1=3`, `5×5+5=30`, `(2+2)×10=40`), all 5 required. `LibraPuzzle.ts`:
+`QUESTION_SEQUENCE` replaces `QUESTION_POOL`;
+`REQUIRED_CORRECT_ANSWERS` is now derived from its length; the unused
+`'missing'` question type is gone. A wrong answer now retries the same
+question (`startNextQuestion()` always loads
+`QUESTION_SEQUENCE[correctAnswerCount]`, which a wrong answer leaves
+unchanged) instead of permanently skipping to a different one — the only
+way the fixed sequence can be satisfied. The answer banner widened
+(`BANNER_WIDTH_PX` 420→560, slot spacing 110→96) to fit 5 slots instead
+of 3; the room-intro copy was updated to say "all 5" and describe the
+retry behavior instead of "3 correct" / skip-on-wrong.
+
+`Doorway.ts` (shared with the Pink Room's exit) gained an opt-in
+`startAttentionPulse()`/`stopAttentionPulse()` pair: a clearly visible,
+continuously breathing glow layered on top of the existing idle/hover
+glow, stopped automatically the instant the doorway is clicked (wired
+into the zone's own `POINTER_DOWN` handler, so no scene has to remember
+to stop it). Off by default — the Pink Room's doorway never calls these,
+so it's unaffected. `LibraRoomScene.ts` starts the pulse right after the
+puzzle's `onCompleted` unlocks the exit, and also on the already-completed
+restore path (re-entering the room later), so the doorway is both
+unlocked and glowing immediately, with no animation replay. Room
+background, `CrystalHolder`, the reward's red-slot destination, the
+registry system, and the return transition are all unchanged.
+
+`npx tsc --noEmit` and `npm run build` both pass. Verified live via a
+temporary `window.__game` exposure (reverted after, confirmed clean by a
+final `tsc`/`build` pass): question 1 loads as `5 × 4 + 3 = ?` with 5
+banner slots; a simulated wrong answer reloads the same question with
+`correctAnswerCount` unchanged; driving all 5 to completion reaches
+`isCompleted: true`; the completion callback activates the exit and
+starts the attention pulse in the same step; a simulated real click on
+the doorway's zone stops the pulse; and a fresh scene start with the
+completed registry flag already set shows the exit already active and
+pulsing on load.
+
+## Current State Summary (verified against source)
+
+The entries above are the chronological sprint log. This section is a
+standing summary of where each system actually stands right now — update
+it (don't just append below it) whenever one of these systems changes.
+
+### Central Hall
+
+- Background, animated Heart of the Temple (crystal + 3 astrolabe rings),
+  atmosphere (dust, sparkles, fire shadows, oculus light), and the Hebrew
+  intro overlay are all complete and unchanged since their sprints above.
+- **Entrance 1 (statue passage):** pot → hidden handle/lever → statue
+  turns open → arched entrance reveals → two-phase walk-through camera
+  transition → `PinkRoomScene`. State persisted via registry flag
+  `leftStatueOpen`.
+- **Entrance 2 (floor seal):** dormant until the player holds
+  `pinkCrystalShard` (granted by the Pink Room puzzle) → seal glows and
+  becomes clickable → click opens it to a dark stairwell → click again →
+  pan/zoom transition → `LibraRoomScene`. State persisted via registry
+  flag `libraFloorEntranceOpen`. Entirely separate from Entrance 1; not
+  reachable from the Pink Room.
+- Persistent `CrystalHolder` UI (see below) is mounted here too, so
+  collected crystals stay visible while in the hall.
+
+### Pink Room (`PinkRoomScene.ts`)
+
+- Reached only via Entrance 1. Animated `PinkCrystal` centerpiece
+  (breathing glow, sparkles, occasional glint).
+- **Puzzle (`EquivalencePuzzle.ts`):** three rounds of a fraction/decimal/
+  percent equivalence puzzle — drag three concentric rings to align the
+  correct group under a fixed marker. A single compact Hebrew intro popup
+  (`RoundIntroPopup.ts`, `'compact'` variant) shows once before round 1
+  only, explaining all three rounds at once; rounds 2/3 begin immediately
+  after each correct answer's feedback/digit sequence, with no popup in
+  between. Validates on ring-check (no separate confirm step), reveals a
+  digit that flies into a floating "crystal code" panel (735), and on
+  completion plays a crystal activation sequence, sets
+  `pinkCrystalShard`/`pinkRoomPuzzleComplete` in the registry, and flies
+  the reward crystal into the `CrystalHolder`'s **pink** slot.
+- **Exit:** the background's own painted archway (top-left), made
+  interactive via `Doorway.ts`; unlocked only once the puzzle is
+  complete. Return transition: short zoom + 400ms fade → `scene.start('CentralHallScene')`.
+
+### Libra Room (`LibraRoomScene.ts`)
+
+- Reached only via Entrance 2 (the hall's floor seal), never from the
+  Pink Room. Uses the real `Background_Libra.png` art (a chamber centered
+  on a giant crystal balance scale) — no procedural backdrop.
+- **Puzzle (`LibraPuzzle.ts`):** a fixed, ordered sequence of exactly 5
+  order-of-operations questions (`QUESTION_SEQUENCE`; all 5 required, no
+  random draw) — the player drags stones onto the scale; each drop is
+  validated immediately (no separate confirm click, unlike the Pink
+  Room's ring-then-check flow). A wrong answer retries the *same*
+  question rather than skipping to a different one. On completion, plays
+  a reward sequence and flies a reward crystal into the `CrystalHolder`'s
+  **red** slot, sets the room's `completed` state in the registry, and
+  unlocks the exit.
+- **Exit:** reuses the background's own painted archway + stairway (right
+  side of frame) via `Doorway.ts`, same technique as the Pink Room. Once
+  unlocked, the doorway also gets a clearly-visible animated "attention"
+  glow (`Doorway.startAttentionPulse()` — opt-in, only used here, so the
+  Pink Room's exit is unaffected) that stops the instant the player
+  clicks it; re-entering the room after completion shows the doorway
+  already unlocked and glowing, no animation replay. Return transition:
+  zoom + fade → `scene.start('CentralHallScene')`.
+- The **green** `CrystalHolder` slot is reserved but not yet wired to any
+  room/puzzle — no third room exists yet.
+
+### Room-entry and return flows (shared conventions)
+
+- Every room entry arrives pre-zoomed with a dark screen-fixed overlay
+  that settles to normal framing (500–800ms, `Sine.Out`); input is locked
+  from the first line of `create()` until the settle finishes.
+- Every return-to-hall exit is a short zoom/fade (~400ms) then
+  `scene.start('CentralHallScene')`; `CentralHallScene.create()` always
+  re-checks its registry flags (`leftStatueOpen`, `libraFloorEntranceOpen`,
+  crystal collection state) and jumps straight to the correct persisted
+  visual state rather than replaying any activation animation.
+- **Scene-instance-reuse bug class (fixed):** Phaser reuses each Scene
+  instance across `stop()`/`start()`, so every one-shot guard flag
+  (`leavingHall`, `isEnteringRoom`, `isEnteringLibraRoom` in
+  `CentralHallScene.ts`; `isReturning` in `PinkRoomScene.ts`/
+  `LibraRoomScene.ts`) is explicitly reset to `false` at the top of
+  `create()`. Related fix: `Doorway.ts`/`Entrance.ts`'s `setActive()` now
+  only toggles `input.enabled` instead of re-calling
+  `setInteractive()`/`disableInteractive()`, which previously could
+  corrupt hit areas if called before `layout()`.
+
+### Crystal collection system
+
+- `GameState.ts` defines `CrystalId = 'pink' | 'red' | 'green'` and a
+  `CrystalCollectionState`, backed by the shared Phaser registry
+  (`getCrystalCollectionState`/`setCrystalCollected`).
+- `CrystalHolder.ts` is a persistent, screen-fixed 3-slot UI (pink, red,
+  green, left to right), mounted in `CentralHallScene`, `PinkRoomScene`,
+  and `LibraRoomScene` alike, always re-synced from the registry on
+  `create()`. Each puzzle's reward-crystal animation flies directly into
+  its slot's real screen position (`getSlotScreenPosition()`) and calls
+  `setCrystalCollected()` + `revealCollected()` (pop-scale reveal) on
+  arrival — there is no separate fixed-corner reward icon anymore.
+
+### Known interaction issues
+
+- None currently open. The scene-instance-reuse class of bugs (doorways/
+  entrances becoming permanently unclickable after one use) was found and
+  fixed — see above.
+- The green `CrystalHolder` slot has no puzzle wired to it yet (expected —
+  no third room exists).
+
+### GitHub repository and deployment
+
+- Repo: `https://github.com/einav-gal/TempleOfNumbers` (branch `main`).
+- Deployment: `.github/workflows/main.yml` builds (`npm run build`) and
+  publishes `./dist` to GitHub Pages on every push to `main`
+  (`actions/upload-pages-artifact` + `actions/deploy-pages`).
+- `vite.config.ts` sets `base: '/TempleOfNumbers/'` so production asset/
+  script paths resolve correctly under the Pages subpath (fixed after a
+  black-screen incident caused by this config existing only as an
+  uncommitted local change — now committed and pushed).
+- **Live URL:** https://einav-gal.github.io/TempleOfNumbers/

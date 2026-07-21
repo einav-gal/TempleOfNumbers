@@ -8,8 +8,6 @@ import type CrystalHolder from './CrystalHolder';
 
 export interface LibraQuestion {
   id: string;
-  /** Which of the two instruction flavors this question uses — not shown directly, just the type label backing `instruction`. */
-  type: 'order' | 'missing';
   instruction: string;
   equation: string;
   choices: number[];
@@ -17,32 +15,30 @@ export interface LibraQuestion {
 }
 
 const ORDER_INSTRUCTION = 'חשבו לפי סדר הפעולות וגררו את התשובה המתאימה אל המאזניים.';
-const MISSING_INSTRUCTION = 'מצאו את המספר שישלים את השוויון וגררו אותו אל המקום הריק.';
 
-// At least 8 usable questions, never repeated within one room session
-// (see usedQuestionIds) — the room only ever needs 3 correct answers,
-// so a pool of 10 comfortably covers even a mistake-heavy session.
-const QUESTION_POOL: LibraQuestion[] = [
-  { id: 'q1', type: 'order', instruction: ORDER_INSTRUCTION, equation: '48 ÷ 6 + 3 × 2 = ?', choices: [12, 14, 16, 22], correctAnswer: 14 },
-  { id: 'q2', type: 'missing', instruction: MISSING_INSTRUCTION, equation: '3 × (? + 2) = 27', choices: [5, 6, 7, 9], correctAnswer: 7 },
-  { id: 'q3', type: 'missing', instruction: MISSING_INSTRUCTION, equation: '72 ÷ ? + 4 = 13', choices: [6, 8, 9, 12], correctAnswer: 8 },
-  { id: 'q4', type: 'order', instruction: ORDER_INSTRUCTION, equation: '6 × 4 - 10 = ?', choices: [12, 14, 18, 24], correctAnswer: 14 },
-  { id: 'q5', type: 'order', instruction: ORDER_INSTRUCTION, equation: '45 ÷ 5 + 7 = ?', choices: [14, 16, 18, 20], correctAnswer: 16 },
-  { id: 'q6', type: 'missing', instruction: MISSING_INSTRUCTION, equation: '4 × (? - 1) = 28', choices: [6, 7, 8, 9], correctAnswer: 8 },
-  { id: 'q7', type: 'missing', instruction: MISSING_INSTRUCTION, equation: '63 ÷ ? + 2 = 9', choices: [7, 8, 9, 11], correctAnswer: 9 },
-  { id: 'q8', type: 'order', instruction: ORDER_INSTRUCTION, equation: '5 × 6 - 8 = ?', choices: [20, 22, 24, 28], correctAnswer: 22 },
-  { id: 'q9', type: 'missing', instruction: MISSING_INSTRUCTION, equation: '2 × (? + 5) = 26', choices: [6, 7, 8, 9], correctAnswer: 8 },
-  { id: 'q10', type: 'order', instruction: ORDER_INSTRUCTION, equation: '84 ÷ 7 + 5 = ?', choices: [15, 16, 17, 19], correctAnswer: 17 },
+// Exactly 5 fixed order-of-operations questions, always asked in this
+// order (never randomized, never substituted) — the room requires all 5
+// to be completed. A wrong answer does not skip to a different question;
+// the same one is retried until solved (see finishIncorrectAnswer()).
+const QUESTION_SEQUENCE: LibraQuestion[] = [
+  { id: 'q1', instruction: ORDER_INSTRUCTION, equation: '5 × 4 + 3 = ?', choices: [17, 20, 23, 35], correctAnswer: 23 },
+  { id: 'q2', instruction: ORDER_INSTRUCTION, equation: '2 + 1 × 0 = ?', choices: [0, 1, 2, 3], correctAnswer: 2 },
+  { id: 'q3', instruction: ORDER_INSTRUCTION, equation: '4 ÷ 2 + 1 = ?', choices: [2, 3, 5, 6], correctAnswer: 3 },
+  { id: 'q4', instruction: ORDER_INSTRUCTION, equation: '5 × 5 + 5 = ?', choices: [25, 30, 35, 50], correctAnswer: 30 },
+  { id: 'q5', instruction: ORDER_INSTRUCTION, equation: '(2 + 2) × 10 = ?', choices: [20, 22, 40, 44], correctAnswer: 40 },
 ];
 
-const REQUIRED_CORRECT_ANSWERS = 3;
+// Derived from the fixed sequence itself, never a separate literal — the
+// room is complete once every question in QUESTION_SEQUENCE has been
+// answered correctly.
+const REQUIRED_CORRECT_ANSWERS = QUESTION_SEQUENCE.length;
 
 // Shown exactly once, before the very first question of the room —
 // every question after this loads directly (see startNextQuestion()),
 // with no per-question intro popup at all.
 const ROOM_INTRO_TITLE = 'היכל האיזון';
 const ROOM_INTRO_BODY =
-  'כדי להשלים את החדר, עליכם להשיג 3 תשובות נכונות.\n\nחשבו לפי סדר הפעולות וגררו את אבן התשובה המתאימה אל כף המאזניים.\n\nאם תטעו, תעברו לחידה אחרת.';
+  'כדי להשלים את החדר, עליכם לפתור נכון את כל 5 החידות.\n\nחשבו לפי סדר הפעולות וגררו את אבן התשובה המתאימה אל כף המאזניים.\n\nאם תטעו, תוכלו לנסות שוב את אותה חידה.';
 const ROOM_INTRO_BUTTON_LABEL = 'מתחילים';
 
 const FEEDBACK_CORRECT_TITLE = 'נכון!';
@@ -121,13 +117,16 @@ const BALANCE_SHAKE_MS = 90;
 // permanent glow), just docked to the top of the viewport instead of
 // anchored to the crystal, and holding the actual collected answers
 // instead of code digits.
-const BANNER_WIDTH_PX = 420;
+// Widened from 420 (and slots pulled in from 110 to 96 apart) to
+// comfortably fit 5 slots instead of the previous 3 — same frame
+// texture/gradient technique, just larger canvas dimensions.
+const BANNER_WIDTH_PX = 560;
 const BANNER_HEIGHT_PX = 120;
 const BANNER_TOP_MARGIN_PX = 20;
 const BANNER_TITLE_OFFSET_Y_PX = -40;
 const BANNER_SLOT_ROW_OFFSET_Y_PX = 22;
 const BANNER_SLOT_SIZE_PX = 46;
-const BANNER_SLOT_SPACING_PX = 110;
+const BANNER_SLOT_SPACING_PX = 96;
 const BANNER_SLOT_FONT_SIZE_PX = 22;
 const BANNER_SLOT_DIGIT_Y_OFFSET_PX = 2;
 const BANNER_SLOT_LOCK_POP_MS = 300;
@@ -184,20 +183,20 @@ interface BannerSlotRuntime {
 }
 
 /**
- * The Libra Room's balance puzzle: one question at a time, drawn at
- * random from a pool (never repeating within a session), until the
- * player has 3 CORRECT answers — there is no fixed question sequence
- * and no retry on a wrong question. Dragging a stone into the right pan
- * validates it immediately (no separate "check" step) — correct records
- * the answer in the top banner (flying in from the crystal, same
- * technique as the Pink Room's code-digit reveal) and loads a new
- * question directly; incorrect discards the current question for good,
- * shows a brief popup, and immediately loads a different one. Only the
- * one-time room intro uses a popup — every question after that swaps
- * the equation/stones in place with no intro panel and no "continue"
- * button. All equations/stones/feedback/banner are dynamic Phaser
- * objects laid over the static Background_Libra.png art — nothing
- * baked into the background.
+ * The Libra Room's balance puzzle: a fixed sequence of exactly 5
+ * order-of-operations questions (QUESTION_SEQUENCE), always asked in the
+ * same order, all 5 required — no random draw, no substituting a
+ * different question. Dragging a stone into the right pan validates it
+ * immediately (no separate "check" step) — correct records the answer in
+ * the top banner (flying in from the crystal, same technique as the Pink
+ * Room's code-digit reveal) and loads the next question in sequence;
+ * incorrect retries the *same* question (a brief popup, then the same
+ * equation/stones reload) rather than skipping ahead. Only the one-time
+ * room intro uses a popup — every question after that swaps the
+ * equation/stones in place with no intro panel and no "continue" button.
+ * All equations/stones/feedback/banner are dynamic Phaser objects laid
+ * over the static Background_Libra.png art — nothing baked into the
+ * background.
  */
 export default class LibraPuzzle {
   private scene: Phaser.Scene;
@@ -239,7 +238,6 @@ export default class LibraPuzzle {
 
   // ---- explicit puzzle state -------------------------------------------
   private correctAnswerCount = 0;
-  private usedQuestionIds = new Set<string>();
   private currentQuestion?: LibraQuestion;
   private selectedAnswer?: number;
   private selectedStone?: StoneRuntime;
@@ -467,19 +465,15 @@ export default class LibraPuzzle {
 
   // ---- question selection ---------------------------------------------
 
-  // Random draw from whichever pool questions haven't been used yet this
-  // session — "do not repeat the same question during one room session."
-  private drawNextQuestion(): LibraQuestion {
-    const remaining = QUESTION_POOL.filter((q) => !this.usedQuestionIds.has(q.id));
-    const pool = remaining.length > 0 ? remaining : QUESTION_POOL;
-    return pool[Phaser.Math.Between(0, pool.length - 1)];
-  }
-
-  // Draws a question and loads it directly — no intro popup, no
-  // "continue" button, no progress-count panel between questions. The
-  // top banner already communicates progress.
+  // Loads the next question in the fixed sequence — always
+  // QUESTION_SEQUENCE[correctAnswerCount], since correctAnswerCount only
+  // ever advances on a genuinely correct answer (a wrong answer leaves it
+  // unchanged, so this naturally reloads the same question — see
+  // finishIncorrectAnswer()). No random draw, no per-question intro
+  // popup, no "continue" button — the top banner already communicates
+  // progress.
   private startNextQuestion(): void {
-    this.loadQuestion(this.drawNextQuestion());
+    this.loadQuestion(QUESTION_SEQUENCE[this.correctAnswerCount]);
   }
 
   private loadQuestion(question: LibraQuestion): void {
@@ -743,7 +737,7 @@ export default class LibraPuzzle {
     if (this.selectedAnswer === question.correctAnswer) {
       this.handleCorrectAnswer(question);
     } else {
-      this.handleIncorrectAnswer(question);
+      this.handleIncorrectAnswer();
     }
   }
 
@@ -779,7 +773,6 @@ export default class LibraPuzzle {
         this.lockAnswerIntoBannerSlot(index, value);
 
         this.correctAnswerCount += 1;
-        this.usedQuestionIds.add(question.id);
         this.currentQuestion = undefined;
         this.selectedAnswer = undefined;
         this.selectedStone = undefined;
@@ -794,7 +787,7 @@ export default class LibraPuzzle {
     });
   }
 
-  private handleIncorrectAnswer(question: LibraQuestion): void {
+  private handleIncorrectAnswer(): void {
     if (this.selectedStone) {
       this.returnStoneToStart(this.selectedStone);
     }
@@ -804,17 +797,18 @@ export default class LibraPuzzle {
     this.feedbackPopup.show(
       { kind: 'incorrect', title: FEEDBACK_WRONG_TITLE, body: FEEDBACK_WRONG_BODY },
       INCORRECT_FEEDBACK_MS,
-      () => this.finishIncorrectAnswer(question),
+      () => this.finishIncorrectAnswer(),
     );
   }
 
-  // "Do not let the player retry the same wrong question" — the
-  // question is marked used here regardless of outcome, and a
-  // different (unused) question is drawn immediately.
-  private finishIncorrectAnswer(question: LibraQuestion): void {
+  // Every question in the fixed 5-question sequence must eventually be
+  // answered correctly — a wrong answer retries the *same* question
+  // rather than skipping to a different one. correctAnswerCount is left
+  // unchanged, so startNextQuestion() naturally reloads
+  // QUESTION_SEQUENCE[correctAnswerCount], i.e. this same question.
+  private finishIncorrectAnswer(): void {
     this.selectedAnswer = undefined;
     this.selectedStone = undefined;
-    this.usedQuestionIds.add(question.id);
     this.currentQuestion = undefined;
     this.isChecking = false;
 
@@ -822,8 +816,8 @@ export default class LibraPuzzle {
   }
 
   // Only reached once correctAnswerCount has reached
-  // REQUIRED_CORRECT_ANSWERS — never a fixed question index. Input is
-  // already locked here (isChecking/isCompleted both true, and
+  // REQUIRED_CORRECT_ANSWERS, i.e. all 5 of QUESTION_SEQUENCE answered
+  // correctly, in order. Input is already locked here (isChecking/isCompleted both true, and
   // destroyStones() removes every draggable stone), and the crystal
   // glow intensifies immediately — but the completion feedback (and,
   // via onCompleted, the exit doorway) only appear once the reward

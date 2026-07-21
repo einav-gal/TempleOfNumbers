@@ -1,39 +1,84 @@
 import Phaser from 'phaser';
 import { createRtlText } from './rtlText';
 
-const FRAME_TEXTURE_KEY = 'pink-puzzle-popup-frame';
-const BUTTON_TEXTURE_KEY = 'pink-puzzle-popup-button';
-const BUTTON_HOVER_TEXTURE_KEY = 'pink-puzzle-popup-button-hover';
-const BUTTON_GLOW_TEXTURE_KEY = 'pink-puzzle-popup-button-glow';
-
 const POPUP_DEPTH = 60;
-const POPUP_WIDTH_PX = 560;
-const POPUP_HEIGHT_PX = 560;
-const POPUP_PADDING_PX = 44;
-
-// Title and body are separate Text objects (never mixed into one block)
-// with top-anchored origins, stacked top-down with fixed minimum gaps —
-// see repositionContent(). Body height varies a lot round to round (the
-// very first round's body is a full room intro + instruction; every
-// other round is a single short instruction line), so only the
-// button's position is computed from the body's actual rendered height;
-// title/body spacing stays fixed since the title is always one short
-// line ("חידה N מתוך M") that never wraps.
-const TITLE_TOP_PADDING_PX = 40;
-const GAP_TITLE_TO_BODY_PX = 66; // 55-70
-const GAP_BODY_TO_BUTTON_PX = 44; // 35-50
-const BODY_WRAP_WIDTH_PX = POPUP_WIDTH_PX - POPUP_PADDING_PX * 2;
-
-// The button's own drawn outline is deliberately smaller than its
-// clickable Zone ("keep a clear hit area larger than the visible
-// outline").
-const BUTTON_WIDTH_PX = 168;
-const BUTTON_HEIGHT_PX = 52;
-const BUTTON_HIT_WIDTH_PX = BUTTON_WIDTH_PX + 32;
-const BUTTON_HIT_HEIGHT_PX = BUTTON_HEIGHT_PX + 24;
 
 const FADE_MS = 260;
 const SCALE_IN_FROM = 0.92;
+
+// Hit area deliberately larger than the drawn button outline ("keep a
+// clear hit area larger than the visible outline") — same margin for
+// every variant.
+const BUTTON_HIT_WIDTH_MARGIN_PX = 32;
+const BUTTON_HIT_HEIGHT_MARGIN_PX = 24;
+
+/**
+ * Which sizing this instance uses. `'default'` is the original, larger
+ * frame (still used by the Libra Room's one-time room-intro popup);
+ * `'compact'` is a smaller, tighter frame for the Pink Room's one-time
+ * puzzle-intro popup, which now only ever shows one short fixed
+ * explanation rather than per-round content. Each variant gets its own
+ * texture keys so the two never share (or fight over) a cached texture
+ * of the wrong size.
+ */
+export type RoundIntroPopupVariant = 'default' | 'compact';
+
+interface VariantConfig {
+  widthPx: number;
+  heightPx: number;
+  paddingPx: number;
+  titleFontSize: number;
+  bodyFontSize: number;
+  bodyLineSpacing: number;
+  titleTopPaddingPx: number;
+  gapTitleToBodyPx: number;
+  gapBodyToButtonPx: number;
+  buttonWidthPx: number;
+  buttonHeightPx: number;
+  buttonLabelFontSize: number;
+}
+
+const VARIANT_CONFIG: Record<RoundIntroPopupVariant, VariantConfig> = {
+  default: {
+    widthPx: 560,
+    heightPx: 560,
+    paddingPx: 44,
+    titleFontSize: 38,
+    bodyFontSize: 26,
+    bodyLineSpacing: 14,
+    titleTopPaddingPx: 40,
+    gapTitleToBodyPx: 66,
+    gapBodyToButtonPx: 44,
+    buttonWidthPx: 168,
+    buttonHeightPx: 52,
+    buttonLabelFontSize: 19,
+  },
+  // Smaller/tighter throughout — this variant only ever displays one
+  // short, fixed title + a 3-line body, never the long room-intro copy
+  // the default variant was originally sized for.
+  compact: {
+    widthPx: 420,
+    heightPx: 300,
+    paddingPx: 30,
+    titleFontSize: 28,
+    bodyFontSize: 19,
+    bodyLineSpacing: 8,
+    titleTopPaddingPx: 26,
+    // gapTitleToBodyPx is measured title-TOP to body-TOP, not title-
+    // bottom to body-top — at the old value of 22 (title's own rendered
+    // height is ~32px), the body's top edge actually landed *above* the
+    // title's bottom edge, visually merging the two. 50 (title height +
+    // ~18px of real breathing room) gives a clear, deliberate gap below
+    // the title while leaving titleTopPaddingPx (so the title itself
+    // stays put) and bodyLineSpacing (the tight, compact gap between the
+    // body's own lines) untouched.
+    gapTitleToBodyPx: 50,
+    gapBodyToButtonPx: 24,
+    buttonWidthPx: 150,
+    buttonHeightPx: 46,
+    buttonLabelFontSize: 17,
+  },
+};
 
 export interface RoundIntroContent {
   title: string;
@@ -42,16 +87,26 @@ export interface RoundIntroContent {
 }
 
 /**
- * A centered, screen-fixed modal shown before each puzzle round: an
- * ancient stone/bronze frame (not a modern dialog box) with a title, a
- * body line, and a single stone confirm button. Owns no puzzle logic —
- * the scene/puzzle supplies content via show() and reacts to onConfirm.
+ * A centered, screen-fixed modal shown before a puzzle begins: an ancient
+ * stone/bronze frame (not a modern dialog box) with a title, a body line,
+ * and a single stone confirm button. Owns no puzzle logic — the
+ * scene/puzzle supplies content via show() and reacts to onConfirm.
  * Screen-fixed (scrollFactor 0) rather than background-pixel-anchored
  * like the rest of the puzzle mechanism, since it must stay centered in
  * the viewport regardless of the background's cover-scale cropping.
  */
 export default class RoundIntroPopup {
   private scene: Phaser.Scene;
+  private config: VariantConfig;
+
+  private frameTextureKey: string;
+  private buttonTextureKey: string;
+  private buttonHoverTextureKey: string;
+  private buttonGlowTextureKey: string;
+  private bodyWrapWidthPx: number;
+  private buttonHitWidthPx: number;
+  private buttonHitHeightPx: number;
+
   private lastWidth = 0;
   private lastHeight = 0;
 
@@ -71,8 +126,16 @@ export default class RoundIntroPopup {
   /** Invoked once the player clicks the confirm button. */
   onConfirm?: () => void;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, variant: RoundIntroPopupVariant = 'default') {
     this.scene = scene;
+    this.config = VARIANT_CONFIG[variant];
+    this.frameTextureKey = `pink-puzzle-popup-frame-${variant}`;
+    this.buttonTextureKey = `pink-puzzle-popup-button-${variant}`;
+    this.buttonHoverTextureKey = `pink-puzzle-popup-button-hover-${variant}`;
+    this.buttonGlowTextureKey = `pink-puzzle-popup-button-glow-${variant}`;
+    this.bodyWrapWidthPx = this.config.widthPx - this.config.paddingPx * 2;
+    this.buttonHitWidthPx = this.config.buttonWidthPx + BUTTON_HIT_WIDTH_MARGIN_PX;
+    this.buttonHitHeightPx = this.config.buttonHeightPx + BUTTON_HIT_HEIGHT_MARGIN_PX;
   }
 
   create(): void {
@@ -92,7 +155,7 @@ export default class RoundIntroPopup {
       .setVisible(false);
 
     this.frame = this.scene.add
-      .image(0, 0, FRAME_TEXTURE_KEY)
+      .image(0, 0, this.frameTextureKey)
       .setOrigin(0.5)
       .setDepth(POPUP_DEPTH)
       .setScrollFactor(0)
@@ -100,13 +163,9 @@ export default class RoundIntroPopup {
       .setVisible(false);
 
     // Title: its own Text object (never mixed with the body), centered,
-    // top-anchored so titleY is exactly its top edge. Mixed Hebrew text
-    // with an embedded number ("חידה 1 מתוך 3") renders correctly as a
-    // single native-bidi Text — Phaser's rtl mode keeps the digit in the
-    // right visual position without ever needing the string reversed or
-    // split into separate objects.
+    // top-anchored so titleY is exactly its top edge.
     this.titleText = createRtlText(this.scene, 0, 0, '', {
-      fontSize: '38px',
+      fontSize: `${this.config.titleFontSize}px`,
       color: '#f0d9b8',
       align: 'center',
     })
@@ -120,10 +179,10 @@ export default class RoundIntroPopup {
     // wrap width narrower than the popup, and a top-anchored origin so
     // its measured .height can be used to place the button beneath it.
     this.bodyText = createRtlText(this.scene, 0, 0, '', {
-      fontSize: '26px',
+      fontSize: `${this.config.bodyFontSize}px`,
       color: '#e8dcc8',
-      lineSpacing: 14,
-      wordWrap: { width: BODY_WRAP_WIDTH_PX, useAdvancedWrap: true },
+      lineSpacing: this.config.bodyLineSpacing,
+      wordWrap: { width: this.bodyWrapWidthPx, useAdvancedWrap: true },
     })
       .setOrigin(1, 0)
       .setDepth(POPUP_DEPTH + 1)
@@ -134,7 +193,7 @@ export default class RoundIntroPopup {
     // Soft additive glow behind the (transparent-fill) button, boosted
     // on hover — the "soft inner or outer glow" hover response.
     this.buttonGlow = this.scene.add
-      .image(0, 0, BUTTON_GLOW_TEXTURE_KEY)
+      .image(0, 0, this.buttonGlowTextureKey)
       .setOrigin(0.5)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setTint(0xffcf8a)
@@ -144,7 +203,7 @@ export default class RoundIntroPopup {
       .setVisible(false);
 
     this.buttonImage = this.scene.add
-      .image(0, 0, BUTTON_TEXTURE_KEY)
+      .image(0, 0, this.buttonTextureKey)
       .setOrigin(0.5)
       .setDepth(POPUP_DEPTH + 1)
       .setScrollFactor(0)
@@ -152,7 +211,7 @@ export default class RoundIntroPopup {
       .setVisible(false);
 
     this.buttonLabel = createRtlText(this.scene, 0, 0, '', {
-      fontSize: '19px',
+      fontSize: `${this.config.buttonLabelFontSize}px`,
       color: '#fff2e0',
     })
       .setOrigin(0.5)
@@ -164,7 +223,7 @@ export default class RoundIntroPopup {
     // Hit area deliberately larger than the drawn outline ("keep a clear
     // hit area larger than the visible outline").
     this.buttonZone = this.scene.add
-      .zone(0, 0, BUTTON_HIT_WIDTH_PX, BUTTON_HIT_HEIGHT_PX)
+      .zone(0, 0, this.buttonHitWidthPx, this.buttonHitHeightPx)
       .setDepth(POPUP_DEPTH + 2);
     this.buttonZone.on(Phaser.Input.Events.POINTER_OVER, () => this.setButtonHovered(true));
     this.buttonZone.on(Phaser.Input.Events.POINTER_OUT, () => this.setButtonHovered(false));
@@ -185,29 +244,28 @@ export default class RoundIntroPopup {
    * Repositions everything to the current viewport center — screen-fixed,
    * not background-anchored. Title/body/button are stacked top-down
    * inside the frame (never centered on top of each other): title and
-   * body use fixed minimum gaps (the title is always one short line that
-   * never wraps), but the button's position is computed from the body
-   * Text's actual rendered height, which varies a lot round to round —
-   * "move it lower only if needed after the body is laid out."
+   * body use fixed minimum gaps, but the button's position is computed
+   * from the body Text's actual rendered height — "move it lower only if
+   * needed after the body is laid out."
    */
   layout(width: number, height: number): void {
     this.lastWidth = width;
     this.lastHeight = height;
     const cx = width / 2;
     const cy = height / 2;
-    const popupTop = cy - POPUP_HEIGHT_PX / 2;
+    const popupTop = cy - this.config.heightPx / 2;
 
-    const titleY = popupTop + TITLE_TOP_PADDING_PX;
-    const bodyY = titleY + GAP_TITLE_TO_BODY_PX;
+    const titleY = popupTop + this.config.titleTopPaddingPx;
+    const bodyY = titleY + this.config.gapTitleToBodyPx;
     const bodyHeight = this.bodyText?.height ?? 0;
-    const buttonCenterY = bodyY + bodyHeight + GAP_BODY_TO_BUTTON_PX + BUTTON_HEIGHT_PX / 2;
+    const buttonCenterY = bodyY + bodyHeight + this.config.gapBodyToButtonPx + this.config.buttonHeightPx / 2;
 
     this.dimmer?.setSize(width, height);
     this.frame?.setPosition(cx, cy);
     this.titleText?.setPosition(cx, titleY);
     // origin (1,0): x is the wrapped paragraph's RIGHT edge, so the
     // fixed-width wrap block stays centered under the title.
-    this.bodyText?.setPosition(cx + BODY_WRAP_WIDTH_PX / 2, bodyY);
+    this.bodyText?.setPosition(cx + this.bodyWrapWidthPx / 2, bodyY);
     this.buttonGlow?.setPosition(cx, buttonCenterY);
     this.buttonImage?.setPosition(cx, buttonCenterY);
     this.buttonLabel?.setPosition(cx, buttonCenterY);
@@ -295,7 +353,7 @@ export default class RoundIntroPopup {
   // texture swap plus a soft additive glow — not a scale bump, which
   // would read like a modern web button.
   private setButtonHovered(hovered: boolean): void {
-    this.buttonImage?.setTexture(hovered ? BUTTON_HOVER_TEXTURE_KEY : BUTTON_TEXTURE_KEY);
+    this.buttonImage?.setTexture(hovered ? this.buttonHoverTextureKey : this.buttonTextureKey);
     this.buttonHoverTween?.stop();
     this.buttonHoverTween = this.scene.tweens.add({
       targets: this.buttonGlow,
@@ -306,15 +364,15 @@ export default class RoundIntroPopup {
   }
 
   // TEMPORARY prototype art: a carved dark stone/bronze frame, wider
-  // relief border than the crystal-code panel's (this is the "biggest"
-  // piece of UI in the room), no flat modern dialog fill.
+  // relief border than the crystal-code panel's, no flat modern dialog
+  // fill.
   private generateFrameTexture(): void {
-    if (this.scene.textures.exists(FRAME_TEXTURE_KEY)) {
+    if (this.scene.textures.exists(this.frameTextureKey)) {
       return;
     }
-    const w = POPUP_WIDTH_PX;
-    const h = POPUP_HEIGHT_PX;
-    const canvas = this.scene.textures.createCanvas(FRAME_TEXTURE_KEY, w, h);
+    const w = this.config.widthPx;
+    const h = this.config.heightPx;
+    const canvas = this.scene.textures.createCanvas(this.frameTextureKey, w, h);
     if (!canvas) {
       return;
     }
@@ -382,8 +440,8 @@ export default class RoundIntroPopup {
   // filled UI button. Shared path builder so the hover variant (drawn
   // separately below) can't visually drift from this one.
   private drawButtonOutline(ctx: CanvasRenderingContext2D, strokeStyle: string, lineWidth: number): void {
-    const w = BUTTON_WIDTH_PX;
-    const h = BUTTON_HEIGHT_PX;
+    const w = this.config.buttonWidthPx;
+    const h = this.config.buttonHeightPx;
     const r = h / 2 - 1;
     const inset = lineWidth / 2 + 1;
 
@@ -402,10 +460,14 @@ export default class RoundIntroPopup {
   // TEMPORARY prototype art: default bronze/gold outline, transparent
   // interior.
   private generateButtonTexture(): void {
-    if (this.scene.textures.exists(BUTTON_TEXTURE_KEY)) {
+    if (this.scene.textures.exists(this.buttonTextureKey)) {
       return;
     }
-    const canvas = this.scene.textures.createCanvas(BUTTON_TEXTURE_KEY, BUTTON_WIDTH_PX, BUTTON_HEIGHT_PX);
+    const canvas = this.scene.textures.createCanvas(
+      this.buttonTextureKey,
+      this.config.buttonWidthPx,
+      this.config.buttonHeightPx,
+    );
     if (!canvas) {
       return;
     }
@@ -416,10 +478,14 @@ export default class RoundIntroPopup {
   // TEMPORARY: the hover state — a brighter, slightly thicker outline
   // (no fill added, staying true to "no solid filled button").
   private generateButtonHoverTexture(): void {
-    if (this.scene.textures.exists(BUTTON_HOVER_TEXTURE_KEY)) {
+    if (this.scene.textures.exists(this.buttonHoverTextureKey)) {
       return;
     }
-    const canvas = this.scene.textures.createCanvas(BUTTON_HOVER_TEXTURE_KEY, BUTTON_WIDTH_PX, BUTTON_HEIGHT_PX);
+    const canvas = this.scene.textures.createCanvas(
+      this.buttonHoverTextureKey,
+      this.config.buttonWidthPx,
+      this.config.buttonHeightPx,
+    );
     if (!canvas) {
       return;
     }
@@ -430,11 +496,11 @@ export default class RoundIntroPopup {
   // A soft radial glow, sized to sit just behind the button outline —
   // the hover-only "soft inner or outer glow."
   private generateButtonGlowTexture(): void {
-    if (this.scene.textures.exists(BUTTON_GLOW_TEXTURE_KEY)) {
+    if (this.scene.textures.exists(this.buttonGlowTextureKey)) {
       return;
     }
-    const size = BUTTON_HEIGHT_PX * 2.2;
-    const canvas = this.scene.textures.createCanvas(BUTTON_GLOW_TEXTURE_KEY, size, size);
+    const size = this.config.buttonHeightPx * 2.2;
+    const canvas = this.scene.textures.createCanvas(this.buttonGlowTextureKey, size, size);
     if (!canvas) {
       return;
     }

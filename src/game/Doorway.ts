@@ -15,6 +15,16 @@ const IDLE_GLOW_ALPHA = 0.14;
 const HOVER_GLOW_ALPHA = 0.4;
 const GLOW_TWEEN_MS = 220;
 
+// "Attention" pulse: an optional, opt-in stronger breathing glow for
+// "this doorway must now be clicked" moments (e.g. right after a room's
+// puzzle completes) — clearly brighter than the passive idle/hover glow,
+// but still the same soft warm texture/tint, not a different visual
+// language. Off by default; only scenes that explicitly call
+// startAttentionPulse() ever see it.
+const ATTENTION_GLOW_ALPHA_MIN = 0.35;
+const ATTENTION_GLOW_ALPHA_MAX = 0.85;
+const ATTENTION_PULSE_MS = 900;
+
 /**
  * A single interactive doorway hotspot: an invisible hit zone over the
  * doorway opening baked into the background art, with a soft warm glow
@@ -30,6 +40,8 @@ export default class Doorway {
   private glow?: Phaser.GameObjects.Image;
   private glowTween?: Phaser.Tweens.Tween;
   private active = false;
+  private attentionTween?: Phaser.Tweens.Tween;
+  private attentionActive = false;
 
   /** Invoked on click. */
   onActivate?: () => void;
@@ -62,7 +74,12 @@ export default class Doorway {
     }
     this.zone.on(Phaser.Input.Events.POINTER_OVER, () => this.setHovered(true));
     this.zone.on(Phaser.Input.Events.POINTER_OUT, () => this.setHovered(false));
-    this.zone.on(Phaser.Input.Events.POINTER_DOWN, () => this.onActivate?.());
+    this.zone.on(Phaser.Input.Events.POINTER_DOWN, () => {
+      // "Stop or hide the glow once the player clicks the doorway" — a
+      // no-op if the attention pulse was never started.
+      this.stopAttentionPulse();
+      this.onActivate?.();
+    });
   }
 
   /** centerX/centerY are screen-space; scale is the background cover-scale factor. */
@@ -95,6 +112,11 @@ export default class Doorway {
   }
 
   private setHovered(hovered: boolean): void {
+    // While the attention pulse owns the glow's alpha, hover shouldn't
+    // fight it with a competing tween.
+    if (this.attentionActive) {
+      return;
+    }
     this.glowTween?.stop();
     const target = hovered ? HOVER_GLOW_ALPHA : this.active ? IDLE_GLOW_ALPHA : 0;
     this.glowTween = this.scene.tweens.add({
@@ -103,6 +125,43 @@ export default class Doorway {
       duration: GLOW_TWEEN_MS,
       ease: Phaser.Math.Easing.Sine.InOut,
     });
+  }
+
+  /**
+   * Starts a clearly-visible, continuously breathing glow — "this doorway
+   * must now be clicked." Stronger and more animated than the passive
+   * idle/hover glow, but the same warm additive texture, not a different
+   * visual language. No-op if already pulsing. Automatically stopped the
+   * instant the doorway is clicked (see create()'s POINTER_DOWN handler);
+   * can also be stopped explicitly via stopAttentionPulse().
+   */
+  startAttentionPulse(): void {
+    if (this.attentionActive || !this.glow) {
+      return;
+    }
+    this.attentionActive = true;
+    this.glowTween?.stop();
+    this.attentionTween?.stop();
+    this.glow.setAlpha(ATTENTION_GLOW_ALPHA_MIN);
+    this.attentionTween = this.scene.tweens.add({
+      targets: this.glow,
+      alpha: ATTENTION_GLOW_ALPHA_MAX,
+      duration: ATTENTION_PULSE_MS,
+      yoyo: true,
+      repeat: -1,
+      ease: Phaser.Math.Easing.Sine.InOut,
+    });
+  }
+
+  /** Stops the attention pulse and restores the normal idle/hover glow. Safe to call anytime — a no-op if not currently pulsing. */
+  stopAttentionPulse(): void {
+    if (!this.attentionActive) {
+      return;
+    }
+    this.attentionActive = false;
+    this.attentionTween?.stop();
+    this.attentionTween = undefined;
+    this.setHovered(false);
   }
 
   // A soft radial glow, generated once per game instance and reused by any
