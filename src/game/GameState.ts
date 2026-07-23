@@ -16,6 +16,7 @@ const STATE_KEY_HAS_SEEN_GAME_INTRO = 'hasSeenGameIntro';
 const STATE_KEY_PINK_ROOM = 'pinkRoom';
 const STATE_KEY_LIBRA_ROOM = 'libraRoom';
 const STATE_KEY_CRYSTAL_COLLECTION = 'crystalCollection';
+const STATE_KEY_ROOM3_PUZZLE_SOLVED = 'room3PuzzleSolved';
 
 export interface PinkRoomState {
   completed: boolean;
@@ -78,6 +79,17 @@ export function getLibraRoomState(registry: Phaser.Data.DataManager): LibraRoomS
 
 export function setLibraRoomState(registry: Phaser.Data.DataManager, patch: Partial<LibraRoomState>): void {
   registry.set(STATE_KEY_LIBRA_ROOM, { ...getLibraRoomState(registry), ...patch });
+}
+
+// ---- Room 3 (map fraction puzzle) --------------------------------------
+
+/** True only once the map puzzle has actually been solved — never reset. */
+export function isRoom3PuzzleSolved(registry: Phaser.Data.DataManager): boolean {
+  return registry.get(STATE_KEY_ROOM3_PUZZLE_SOLVED) === true;
+}
+
+export function setRoom3PuzzleSolved(registry: Phaser.Data.DataManager): void {
+  registry.set(STATE_KEY_ROOM3_PUZZLE_SOLVED, true);
 }
 
 // ---- crystal collection (pouch) ----------------------------------------

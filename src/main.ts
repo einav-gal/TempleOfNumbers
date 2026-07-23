@@ -5,6 +5,7 @@ import HiddenPassageScene from './scenes/HiddenPassageScene';
 import PinkRoomScene from './scenes/PinkRoomScene';
 import LibraRoomScene from './scenes/LibraRoomScene';
 import LibraStaircaseScene from './scenes/LibraStaircaseScene';
+import Room3Scene from './scenes/Room3Scene';
 
 // Wait for the shared Bellefair font (see src/game/textStyle.ts) to
 // actually be usable before any scene creates its first Phaser Text —
@@ -19,18 +20,20 @@ async function boot(): Promise<void> {
     parent: 'game',
     backgroundColor: '#000000',
     scale: {
-      mode: Phaser.Scale.RESIZE,
-      width: '100%',
-      height: '100%',
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: 1536,
+      height: 1024,
     },
     scene: [
-      CentralHallScene,
-      PuzzlePlaceholderScene,
-      HiddenPassageScene,
-      PinkRoomScene,
-      LibraStaircaseScene,
-      LibraRoomScene,
-    ],
+  CentralHallScene,
+  PuzzlePlaceholderScene,
+  HiddenPassageScene,
+  PinkRoomScene,
+  LibraStaircaseScene,
+  LibraRoomScene,
+  Room3Scene,
+],
   });
 }
 

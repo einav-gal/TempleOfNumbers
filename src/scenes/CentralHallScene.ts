@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import backgroundUrl from '../../assets/images/central-hall/background.png';
+import backgroundUrl from '../../assets/images/central-hall/background-without-wheel.png';
 import potUrl from '../../assets/images/central-hall/Pot/pot.png';
 import HeartOfTheTemple from '../game/HeartOfTheTemple';
 import Atmosphere from '../game/Atmosphere';
@@ -12,6 +12,7 @@ import Entrance from '../game/Entrance';
 import FloorEntrance from '../game/FloorEntrance';
 import IntroOverlay from '../game/IntroOverlay';
 import CrystalHolder from '../game/CrystalHolder';
+import WallWheel from '../game/WallWheel';
 import { hasSeenGameIntro, markGameIntroSeen } from '../game/GameState';
 import { FONT_FAMILY } from '../game/textStyle';
 import handleUrl from '../../assets/images/central-hall/handle/handle.png';
@@ -29,6 +30,7 @@ const DOORWAY_FADE_OUT_MS = 400;
 const POT_DEPTH = 4;
 const HANDLE_DEPTH = 3;
 const STATUE_DEPTH = 2;
+const WALL_WHEEL_DEPTH = 2;
 
 // Anchor measured in background-image pixels (1536x1024 source): the center
 // of the pedestal's circular top surface. The Heart of the Temple derives
@@ -139,6 +141,21 @@ const STATE_KEY_LEFT_STATUE_OPEN = 'leftStatueOpen';
 // Central Hall is shown.
 const STATE_KEY_FLOOR_ENTRANCE_OPEN = 'isFloorEntranceOpen';
 
+// Separate circular wall mechanism, measured in the 1536x1024 Central Hall
+// background. The visible wheel is centered over the circular brick recess.
+const WALL_WHEEL_CENTER_X = 768;
+const WALL_WHEEL_CENTER_Y = 286;
+const WALL_WHEEL_WIDTH_BG = 185;
+
+// Temporary development state: the wheel is active from the beginning.
+// Once opened, this flag preserves the open passage across room returns.
+const STATE_KEY_WALL_WHEEL_OPEN = 'wallWheelOpen';
+
+const WHEEL_ENTRY_DURATION_MS = 850;
+const WHEEL_ENTRY_FILL_FRACTION = 0.7;
+const WHEEL_ENTRY_MAX_ZOOM = 5;
+
+
 export default class CentralHallScene extends Phaser.Scene {
   private background?: Phaser.GameObjects.Image;
   private heart?: HeartOfTheTemple;
@@ -152,6 +169,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private floorEntrance?: FloorEntrance;
   private intro?: IntroOverlay;
   private crystalHolder?: CrystalHolder;
+  private wallWheel?: WallWheel;
   // Independent per-destination transition guards — never one shared
   // lock. Each is reset to false at the top of create() (Phaser reuses
   // this Scene instance across stop()/start(), so without the reset a
@@ -161,6 +179,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private isEnteringPinkRoom = false;
   private isEnteringLibraRoom = false;
   private isEnteringPuzzlePlaceholder = false;
+  private isEnteringRoom3 = false;
   private backgroundScale = 1;
   private popup?: Phaser.GameObjects.Container;
   private popupOverlay?: Phaser.GameObjects.Rectangle;
@@ -177,6 +196,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.load.image(HANDLE_KEY, handleUrl);
     this.load.image(STATUE_KEY, statueUrl);
     HeartOfTheTemple.preload(this);
+    WallWheel.preload(this);
     Atmosphere.preload(this);
     IntroOverlay.preload(this);
   }
@@ -199,8 +219,14 @@ export default class CentralHallScene extends Phaser.Scene {
     this.isEnteringPinkRoom = false;
     this.isEnteringLibraRoom = false;
     this.isEnteringPuzzlePlaceholder = false;
+    this.isEnteringRoom3 = false;
 
     this.background = this.add.image(0, 0, BACKGROUND_KEY);
+
+    this.wallWheel = new WallWheel(this, { widthBg: WALL_WHEEL_WIDTH_BG });
+    this.wallWheel.create(WALL_WHEEL_DEPTH);
+    this.wallWheel.onOpened = () => this.registry.set(STATE_KEY_WALL_WHEEL_OPEN, true);
+    this.wallWheel.onActivate = () => this.enterRoom3ThroughWheel();
 
     // Plain full-viewport rectangle, fixed to screen (scrollFactor 0) so
     // it stays flat rather than panning/zooming with the world — used
@@ -318,6 +344,10 @@ export default class CentralHallScene extends Phaser.Scene {
       this.floorEntrance?.restoreOpen();
     }
 
+    if (this.registry.get(STATE_KEY_WALL_WHEEL_OPEN)) {
+      this.wallWheel?.restoreOpen();
+    }
+
     // Final, authoritative pass — every return path (Pink Room, Libra
     // Room, or the puzzle placeholder) re-enters through this same
     // create(), so this always runs regardless of where the player is
@@ -330,6 +360,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.statue?.destroy();
       this.floorEntrance?.destroy();
       this.crystalHolder?.destroy();
+      this.wallWheel?.destroy();
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
@@ -387,6 +418,12 @@ export default class CentralHallScene extends Phaser.Scene {
     const toScreenY = (bgY: number) => this.toScreenY(bgY, height);
 
     this.overlay?.setSize(width, height);
+
+    this.wallWheel?.layout(
+      toScreenX(WALL_WHEEL_CENTER_X),
+      toScreenY(WALL_WHEEL_CENTER_Y),
+      this.backgroundScale,
+    );
 
     this.heart?.layout(
       toScreenX(PEDESTAL_CENTER_X),
@@ -642,6 +679,46 @@ export default class CentralHallScene extends Phaser.Scene {
     });
   }
 
+
+  /**
+   * Third-room entrance: once the wall wheel has opened, center the camera
+   * on the revealed circular passage and push through it before starting
+   * Room3Scene. The wheel itself owns opening and persistence callbacks;
+   * this method owns only the scene transition.
+   */
+  private enterRoom3ThroughWheel(): void {
+    if (this.isTransitioningAway()) {
+      return;
+    }
+    this.isEnteringRoom3 = true;
+    this.input.enabled = false;
+
+    const opening = this.wallWheel?.getOpeningBounds();
+    if (!opening) {
+      this.scene.start('Room3Scene');
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const targetZoom = Math.min(
+      WHEEL_ENTRY_MAX_ZOOM,
+      (this.scale.height * WHEEL_ENTRY_FILL_FRACTION) / Math.max(opening.height, 1),
+    );
+
+    camera.pan(opening.centerX, opening.centerY, WHEEL_ENTRY_DURATION_MS, Phaser.Math.Easing.Cubic.InOut);
+    camera.zoomTo(targetZoom, WHEEL_ENTRY_DURATION_MS, Phaser.Math.Easing.Cubic.InOut);
+
+    camera.once(Phaser.Cameras.Scene2D.Events.ZOOM_COMPLETE, () => {
+      this.tweens.add({
+        targets: this.overlay,
+        alpha: 0.75,
+        duration: 160,
+        ease: Phaser.Math.Easing.Sine.In,
+        onComplete: () => this.scene.start('Room3Scene'),
+      });
+    });
+  }
+
   private enterLeftDoorway(): void {
     if (this.isTransitioningAway()) {
       return;
@@ -659,7 +736,7 @@ export default class CentralHallScene extends Phaser.Scene {
   // one exit's transition overlapping another's (never used as a single
   // persistent lock — each flag is reset in create(), see there).
   private isTransitioningAway(): boolean {
-    return this.isEnteringPinkRoom || this.isEnteringLibraRoom || this.isEnteringPuzzlePlaceholder;
+    return this.isEnteringPinkRoom || this.isEnteringLibraRoom || this.isEnteringPuzzlePlaceholder || this.isEnteringRoom3;
   }
 
   private closePopup(): void {

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "PowerShell(node --version)",
-      "PowerShell(npm --version)"
+      "PowerShell(npm --version)",
+      "PowerShell(npm.cmd run build)",
+      "Bash(npm.cmd run *)"
     ]
   }
 }
