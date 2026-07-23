@@ -24,6 +24,7 @@ async function boot(): Promise<void> {
       autoCenter: Phaser.Scale.CENTER_BOTH,
       width: 1536,
       height: 1024,
+      expandParent: true,
     },
     scene: [
   CentralHallScene,
