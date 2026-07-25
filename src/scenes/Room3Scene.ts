@@ -5,6 +5,7 @@ import Doorway from '../game/Doorway';
 import CrystalHolder from '../game/CrystalHolder';
 import MapFractionPuzzle from '../game/MapFractionPuzzle';
 import { createRtlText } from '../game/rtlText';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from '../game/scaleMode';
 
 const BACKGROUND_KEY = 'room3-background';
 const OVERLAY_DEPTH = 90;
@@ -240,8 +241,13 @@ export default class Room3Scene extends Phaser.Scene {
       const exitLeft = exitScreenX - exitHalfWidth;
       const exitTop = exitScreenY - exitHalfHeight;
 
+      // On short phone-landscape screens (ENVELOP scale mode) the fixed
+      // design canvas gets cropped along its top edge — pushing the
+      // puzzle's whole safe area down by ENVELOP_TOP_SAFE_MARGIN_PX there
+      // keeps its title strip clear of that cropped band. Desktop/tablet
+      // (FIT) keeps the original, much smaller margin.
       const safeLeft = PUZZLE_SAFE_MARGIN_PX;
-      const safeTop = PUZZLE_SAFE_MARGIN_PX;
+      const safeTop = isEnvelopScaleMode(this) ? ENVELOP_TOP_SAFE_MARGIN_PX : PUZZLE_SAFE_MARGIN_PX;
       const safeRight = Math.max(exitLeft - PUZZLE_EXIT_CLEARANCE_PX, width * 0.3);
       const safeBottom = Math.max(exitTop - PUZZLE_EXIT_CLEARANCE_PX, height * 0.3);
       const safeWidth = safeRight - safeLeft;

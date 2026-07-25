@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"
+    />
     <title>Temple of the Lost Numbers</title>
     <!-- Bellefair: the game's one shared font, Hebrew + Latin alike (see src/game/textStyle.ts). Regular weight only. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -13,20 +16,80 @@
       body {
         margin: 0;
         padding: 0;
-        background: #000;
         width: 100%;
         height: 100%;
         overflow: hidden;
+        background: #000;
       }
 
+      /* No wrapper around #game carries its own max-width/padding/margin
+         or fixed size — it always fills the viewport so Phaser's own Scale
+         Manager (see src/main.ts — FIT on desktop/tablet, ENVELOP on short
+         phone-landscape screens) has the full available space to work
+         with, with no extra frame ever clipping or scrolling it. Single-
+         finger drag doesn't pan/scroll the page (the game handles its own
+         touch input), but pinch-zoom is explicitly preserved.  */
       #game {
-        width: 100%;
-        height: 100%;
+        width: 100vw;
+        height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        touch-action: pinch-zoom;
+      }
+
+      /* Phaser sets the canvas's own CSS width/height directly to
+         implement whichever scale mode is active. Under FIT that canvas
+         is already never bigger than #game, so this is a harmless no-op;
+         under ENVELOP (phone landscape) the canvas is deliberately made
+         TALLER than #game so the extra height can crop off top/bottom via
+         #game's own overflow:hidden — clamping it with max-width/height
+         here would fight that and squash the image, so nothing here
+         constrains the canvas's size at all. */
+      #game canvas {
+        display: block;
+      }
+
+      /* Phones held sideways (short viewport height) — Phaser is already
+         using ENVELOP for this exact media query (see main.ts), so no
+         canvas-sizing CSS is needed here at all; this is reserved for any
+         future landscape-only tweaks that shouldn't apply on desktop.  */
+      @media (orientation: landscape) and (max-height: 600px) {
+      }
+
+      /* Portrait-only prompt to rotate — pure CSS, so it appears/disappears
+         immediately on rotation with no JS orientation listener needed. */
+      #rotate-overlay {
+        display: none;
+      }
+
+      @media (orientation: portrait) {
+        #rotate-overlay {
+          display: flex;
+        }
+      }
+
+      #rotate-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        background: #000;
+        color: #f2e9d8;
+        font-family: 'Bellefair', serif;
+        font-size: 22px;
       }
     </style>
   </head>
   <body>
     <div id="game"></div>
+    <div id="rotate-overlay">
+      <p>סובבו את המכשיר למצב מאוזן</p>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

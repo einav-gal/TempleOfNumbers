@@ -3,6 +3,7 @@ import mapBaseImageUrl from '../../assets/images/Room3/map-puzzle-base.png';
 import { createRtlText } from './rtlText';
 import { FONT_FAMILY } from './textStyle';
 import { isRoom3PuzzleSolved, setRoom3PuzzleSolved, setCrystalCollected } from './GameState';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
 import type CrystalHolder from './CrystalHolder';
 
 /**
@@ -531,9 +532,13 @@ export default class MapFractionPuzzle {
     // Screen-fixed top-right code banner — viewport px, not map-anchored,
     // near/above the room's own crystal (also on the right), comfortably
     // clear of both the title strip (top-center) and the map (left side).
+    // On short phone-landscape screens (ENVELOP) the canvas is cropped
+    // along its top edge, so a larger top margin is used there so the
+    // banner never falls inside that cropped band.
+    const bannerTopMargin = isEnvelopScaleMode(this.scene) ? ENVELOP_TOP_SAFE_MARGIN_PX : CODE_BANNER_TOP_MARGIN_PX;
     this.bannerContainer?.setPosition(
       this.scene.scale.width - CODE_BANNER_RIGHT_MARGIN_PX - CODE_BANNER_WIDTH_PX / 2,
-      CODE_BANNER_TOP_MARGIN_PX + CODE_BANNER_HEIGHT_PX / 2,
+      bannerTopMargin + CODE_BANNER_HEIGHT_PX / 2,
     );
   }
 

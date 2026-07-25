@@ -1,9 +1,15 @@
 import Phaser from 'phaser';
 import { getCrystalCollectionState, type CrystalId } from './GameState';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
 
 // Compact — "a small ancient pouch," not a modern inventory panel —
 // screen-fixed in the upper-left safe area, margin-anchored so it's
-// never clipped by the top or left edge at any viewport size.
+// never clipped by the top or left edge at any viewport size. On short
+// phone-landscape screens (ENVELOP scale mode — see scaleMode.ts) the
+// design canvas gets cropped along its top edge, so this same 18px
+// margin would fall completely outside the visible area there; the
+// larger ENVELOP_TOP_SAFE_MARGIN_PX is used for the Y margin only in
+// that specific case (desktop/tablet FIT layout is untouched).
 const HOLDER_WIDTH_PX = 186;
 const HOLDER_HEIGHT_PX = 70;
 const HOLDER_MARGIN_X_PX = 18;
@@ -57,8 +63,9 @@ export default class CrystalHolder {
   create(depth: number): void {
     this.generateTextures();
 
+    const marginY = isEnvelopScaleMode(this.scene) ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
     const container = this.scene.add
-      .container(HOLDER_MARGIN_X_PX, HOLDER_MARGIN_Y_PX)
+      .container(HOLDER_MARGIN_X_PX, marginY)
       .setDepth(depth)
       .setScrollFactor(0);
 

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import introTorchUrl from '../../assets/images/central-hall/intro-torch.png';
 import { FONT_FAMILY } from './textStyle';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
 
 const OVERLAY_ALPHA = 0.72;
 const FADE_OUT_MS = 500;
@@ -41,6 +42,32 @@ const BODY_TEXT = [
 const BUTTON_TEXT = 'כניסה למקדש';
 const BUTTON_WIDTH = 190;
 const BUTTON_HEIGHT = 56;
+const TITLE_FONT_PX = 27;
+const BODY_FONT_PX = 22;
+const BUTTON_FONT_PX = 22;
+const LINE_SPACING_PX = 6;
+
+// A short phone held sideways (ENVELOP scale mode — see scaleMode.ts)
+// has plenty of *width* to spare (ENVELOP never crops horizontally) but
+// a cropped *height* budget — so the panel goes noticeably wider and its
+// title/button grow, while the (12-line) body text only grows a little
+// and its line spacing/gaps tighten, with an explicit shrink-to-fit floor
+// (see layout()) as a safety net against the panel ever exceeding the
+// visible vertical band.
+const MOBILE_PANEL_WIDTH_RATIO = 0.92;
+const MOBILE_PANEL_MAX_WIDTH = 1320;
+const MOBILE_TITLE_FONT_PX = 34;
+const MOBILE_BODY_FONT_PX = 25;
+const MOBILE_BODY_FONT_MIN_PX = 17;
+const MOBILE_LINE_SPACING_PX = 3;
+const MOBILE_PANEL_PADDING_TOP = 20;
+const MOBILE_PANEL_PADDING_BOTTOM = 20;
+const MOBILE_TITLE_BODY_GAP = 12;
+const MOBILE_BODY_DIVIDER_GAP = 12;
+const MOBILE_DIVIDER_BUTTON_GAP = 10;
+const MOBILE_BUTTON_WIDTH = 260;
+const MOBILE_BUTTON_HEIGHT = 72;
+const MOBILE_BUTTON_FONT_PX = 28;
 
 const DIVIDER_WIDTH_RATIO = 0.5;
 
@@ -122,6 +149,11 @@ export default class IntroOverlay {
   private buttonBg?: Phaser.GameObjects.Graphics;
   private buttonLabel?: Phaser.GameObjects.Text;
   private buttonHovered = false;
+  // Recomputed every layout() call (desktop/tablet FIT vs phone ENVELOP —
+  // see layout()); drawButton()/the interactive hit area both read these
+  // rather than the BUTTON_WIDTH/HEIGHT constants directly.
+  private buttonWidth = BUTTON_WIDTH;
+  private buttonHeight = BUTTON_HEIGHT;
 
   private glows: FireGlow[] = [];
 
@@ -235,7 +267,7 @@ export default class IntroOverlay {
     this.drawButton();
 
     this.buttonBg.setInteractive(
-      new Phaser.Geom.Rectangle(-BUTTON_WIDTH / 2, -BUTTON_HEIGHT / 2, BUTTON_WIDTH, BUTTON_HEIGHT),
+      new Phaser.Geom.Rectangle(-this.buttonWidth / 2, -this.buttonHeight / 2, this.buttonWidth, this.buttonHeight),
       Phaser.Geom.Rectangle.Contains,
     );
     this.buttonBg.input!.cursor = 'pointer';
@@ -255,45 +287,96 @@ export default class IntroOverlay {
   layout(width: number, height: number): void {
     this.dim?.setSize(width, height);
 
-    const panelWidth = Phaser.Math.Clamp(
-      width * PANEL_WIDTH_RATIO,
-      PANEL_MIN_WIDTH,
-      Math.min(PANEL_MAX_WIDTH, width - 40),
-    );
+    // A short phone held sideways (ENVELOP) has no horizontal crop at all
+    // (see scaleMode.ts) — only a cropped vertical band — so the panel
+    // goes wider and its title/button grow freely, while the body text
+    // grows only a little and everything else tightens, with an explicit
+    // shrink-to-fit loop below as a safety net. Desktop/tablet (FIT) is
+    // completely unaffected — this whole branch only ever changes the
+    // *values* fed into the exact same layout math beneath it.
+    const isMobile = isEnvelopScaleMode(this.scene);
+
+    const panelWidthRatio = isMobile ? MOBILE_PANEL_WIDTH_RATIO : PANEL_WIDTH_RATIO;
+    const panelMaxWidth = isMobile ? MOBILE_PANEL_MAX_WIDTH : PANEL_MAX_WIDTH;
+    const titleFontPx = isMobile ? MOBILE_TITLE_FONT_PX : TITLE_FONT_PX;
+    const lineSpacingPx = isMobile ? MOBILE_LINE_SPACING_PX : LINE_SPACING_PX;
+    const paddingTop = isMobile ? MOBILE_PANEL_PADDING_TOP : PANEL_PADDING_TOP;
+    const paddingBottom = isMobile ? MOBILE_PANEL_PADDING_BOTTOM : PANEL_PADDING_BOTTOM;
+    const titleBodyGap = isMobile ? MOBILE_TITLE_BODY_GAP : TITLE_BODY_GAP;
+    const bodyDividerGap = isMobile ? MOBILE_BODY_DIVIDER_GAP : BODY_DIVIDER_GAP;
+    const dividerButtonGap = isMobile ? MOBILE_DIVIDER_BUTTON_GAP : DIVIDER_BUTTON_GAP;
+    this.buttonWidth = isMobile ? MOBILE_BUTTON_WIDTH : BUTTON_WIDTH;
+    this.buttonHeight = isMobile ? MOBILE_BUTTON_HEIGHT : BUTTON_HEIGHT;
+    const buttonFontPx = isMobile ? MOBILE_BUTTON_FONT_PX : BUTTON_FONT_PX;
+
+    const panelWidth = Phaser.Math.Clamp(width * panelWidthRatio, PANEL_MIN_WIDTH, Math.min(panelMaxWidth, width - 40));
     const textWidth = panelWidth - PANEL_PADDING_X * 2;
 
+    this.titleText?.setFontSize(titleFontPx);
     this.titleText?.setWordWrapWidth(textWidth, true);
     this.bodyText?.setWordWrapWidth(textWidth, true);
+    this.buttonLabel?.setFontSize(buttonFontPx);
+    if (this.buttonBg?.input) {
+      this.buttonBg.input.hitArea = new Phaser.Geom.Rectangle(
+        -this.buttonWidth / 2,
+        -this.buttonHeight / 2,
+        this.buttonWidth,
+        this.buttonHeight,
+      );
+    }
+    this.drawButton();
+
+    // Shrinks the body font (down to a readable floor) only when the
+    // panel would otherwise exceed the visible vertical band on a
+    // cropped ENVELOP screen — never engages on desktop/tablet FIT, where
+    // there is no crop to worry about.
+    let bodyFontPx = isMobile ? MOBILE_BODY_FONT_PX : BODY_FONT_PX;
+    this.bodyText?.setFontSize(bodyFontPx).setLineSpacing(lineSpacingPx);
+
+    const computePanelHeight = () => {
+      const titleH = this.titleText?.height ?? 0;
+      const bodyH = this.bodyText?.height ?? 0;
+      return (
+        paddingTop +
+        EMBLEM_RADIUS * 2 +
+        EMBLEM_TITLE_GAP +
+        titleH +
+        titleBodyGap +
+        bodyH +
+        bodyDividerGap +
+        dividerButtonGap +
+        this.buttonHeight +
+        paddingBottom
+      );
+    };
+
+    let panelHeight = computePanelHeight();
+    if (isMobile) {
+      const availableHeight = height - ENVELOP_TOP_SAFE_MARGIN_PX - ENVELOP_BOTTOM_SAFE_MARGIN_PX;
+      while (panelHeight > availableHeight && bodyFontPx > MOBILE_BODY_FONT_MIN_PX) {
+        bodyFontPx -= 1;
+        this.bodyText?.setFontSize(bodyFontPx);
+        panelHeight = computePanelHeight();
+      }
+    }
 
     const titleHeight = this.titleText?.height ?? 0;
     const bodyHeight = this.bodyText?.height ?? 0;
-
-    const panelHeight =
-      PANEL_PADDING_TOP +
-      EMBLEM_RADIUS * 2 +
-      EMBLEM_TITLE_GAP +
-      titleHeight +
-      TITLE_BODY_GAP +
-      bodyHeight +
-      BODY_DIVIDER_GAP +
-      DIVIDER_BUTTON_GAP +
-      BUTTON_HEIGHT +
-      PANEL_PADDING_BOTTOM;
 
     // Local Y offsets, relative to the panel's own center (0,0) — used both
     // to draw ornaments inside the panel Graphics and to position the text
     // container/button (converted to screen space below). Every element
     // that needs to be centered uses this same `centerX`.
-    let cursor = -panelHeight / 2 + PANEL_PADDING_TOP;
+    let cursor = -panelHeight / 2 + paddingTop;
     const emblemY = cursor + EMBLEM_RADIUS;
     cursor += EMBLEM_RADIUS * 2 + EMBLEM_TITLE_GAP;
     const titleY = cursor + titleHeight / 2;
-    cursor += titleHeight + TITLE_BODY_GAP;
+    cursor += titleHeight + titleBodyGap;
     const bodyY = cursor + bodyHeight / 2;
-    cursor += bodyHeight + BODY_DIVIDER_GAP;
+    cursor += bodyHeight + bodyDividerGap;
     const dividerY = cursor;
-    cursor += DIVIDER_BUTTON_GAP;
-    const buttonY = cursor + BUTTON_HEIGHT / 2;
+    cursor += dividerButtonGap;
+    const buttonY = cursor + this.buttonHeight / 2;
 
     const centerX = width / 2;
     const centerY = height / 2;
@@ -514,8 +597,8 @@ export default class IntroOverlay {
     if (!this.buttonBg) {
       return;
     }
-    const w = BUTTON_WIDTH;
-    const h = BUTTON_HEIGHT;
+    const w = this.buttonWidth;
+    const h = this.buttonHeight;
     const borderColor = this.buttonHovered ? GOLD_BRIGHT : GOLD;
     this.buttonBg.clear();
 
