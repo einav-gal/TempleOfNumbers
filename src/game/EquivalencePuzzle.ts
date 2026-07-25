@@ -721,8 +721,11 @@ export default class EquivalencePuzzle {
       // A ring is already locked for this drag — never switch mid-drag.
       return;
     }
-    const dx = pointer.x - this.centerX;
-    const dy = pointer.y - this.centerY;
+    // pointer.worldX/worldY (not pointer.x/y) — centerX/centerY are
+    // world-space, and pointer.x/y stop matching them as soon as the
+    // camera is zoomed/panned (see MobilePinchZoom).
+    const dx = pointer.worldX - this.centerX;
+    const dy = pointer.worldY - this.centerY;
     const distBg = Math.sqrt(dx * dx + dy * dy) / this.scale;
 
     const band = RING_BANDS.find((b) => distBg >= b.minBg && distBg <= b.maxBg);
@@ -746,7 +749,7 @@ export default class EquivalencePuzzle {
     this.activeDragRingId = ring.id;
     ring.isDragging = true;
     ring.snapTween?.stop();
-    ring.dragLastPointerAngleDeg = this.pointerAngleDeg(pointer.x, pointer.y);
+    ring.dragLastPointerAngleDeg = this.pointerAngleDeg(pointer.worldX, pointer.worldY);
     this.setRingActiveHighlight(ring, true);
     // "dragging: crystal temporarily disabled until pointer up" — and,
     // per the marker-accuracy fix, not just until pointer up but until
@@ -766,7 +769,7 @@ export default class EquivalencePuzzle {
     if (!ring || !ring.isDragging) {
       return;
     }
-    const currentAngle = this.pointerAngleDeg(pointer.x, pointer.y);
+    const currentAngle = this.pointerAngleDeg(pointer.worldX, pointer.worldY);
     const step = Phaser.Math.Angle.WrapDegrees(currentAngle - ring.dragLastPointerAngleDeg);
     ring.angle += step;
     ring.dragLastPointerAngleDeg = currentAngle;
