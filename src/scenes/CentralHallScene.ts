@@ -329,7 +329,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.heart.setSuppressed(true);
       this.leftDoorway.setActive(false);
       this.pot.setActive(false);
-      this.pinchZoom?.setEnabled(false);
+      this.pinchZoom?.disable();
 
       this.intro = new IntroOverlay(this);
       this.intro.create();
@@ -338,7 +338,7 @@ export default class CentralHallScene extends Phaser.Scene {
         this.heart?.setSuppressed(false);
         this.leftDoorway?.setActive(true);
         this.pot?.setActive(true);
-        this.pinchZoom?.setEnabled(true);
+        this.pinchZoom?.enable();
       };
     }
 

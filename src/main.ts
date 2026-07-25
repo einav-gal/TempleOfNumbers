@@ -46,6 +46,15 @@ async function boot(): Promise<void> {
       height: 1024,
       expandParent: true,
     },
+    // Phaser only tracks ONE pointer by default (input.activePointers
+    // defaults to 1), so a second simultaneous touch wouldn't even get
+    // its own Pointer object — meaning Phaser's own hit-testing couldn't
+    // correctly track two fingers landing on different objects at once,
+    // independent of anything MobilePinchZoom.ts does. 3 covers a
+    // two-finger gesture plus a little headroom.
+    input: {
+      activePointers: 3,
+    },
     scene: [
   CentralHallScene,
   PuzzlePlaceholderScene,

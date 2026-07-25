@@ -31,15 +31,33 @@ interface TouchPoint {
  * Shared, per-scene two-finger pinch-to-zoom + one-finger pan (while
  * zoomed in) + a small "100%" reset button — installed identically by
  * every interactive room scene instead of duplicating this logic (see
- * CentralHallScene/PinkRoomScene/LibraRoomScene/Room3Scene). Operates
- * purely on the scene's own main camera (camera.zoom/scrollX/scrollY,
- * via setZoom()/direct scrollX/scrollY assignment — never CSS transform,
- * never resizing the canvas element) — Phaser's own input system then
- * hit-tests every ordinary game object against that same camera
- * automatically, so nothing here does manual screen-coordinate hit
- * testing or creates any full-viewport interactive Zone/Rectangle of its
- * own (the only interactive object this class ever creates is the small
- * 52x52 reset button, scrollFactor(0), positioned in a corner).
+ * CentralHallScene/PinkRoomScene/LibraRoomScene/Room3Scene). All zoom is
+ * `camera.setZoom()` + direct `camera.scrollX`/`scrollY` assignment —
+ * never CSS transform, never resizing the canvas element, never a
+ * browser-level zoom. Phaser's own input system then hit-tests every
+ * ordinary game object against that same camera automatically, so
+ * nothing here does manual screen-coordinate hit testing, and the only
+ * interactive object this class ever creates is the small 52x52 reset
+ * button (`scrollFactor(0)`) — never a full-viewport Zone/Rectangle that
+ * could sit above (and swallow clicks meant for) ordinary scene content.
+ *
+ * WHY THIS LISTENS VIA RAW DOM TOUCH EVENTS, NOT `scene.input.on(...)`:
+ * the natural design would be to track the pinch/pan gesture itself via
+ * Phaser's own `scene.input.on('pointerdown'/'pointermove'/'pointerup')`
+ * — but Phaser's InputPlugin gates its ENTIRE update pipeline on
+ * `this.isActive()` (see `InputPlugin.update()` in Phaser's own source),
+ * which returns false the instant `scene.input.enabled = false`. That
+ * means the moment this class suppresses clicks on *other* objects by
+ * disabling scene input, its OWN `scene.input.on(...)` listeners would
+ * also stop firing — with no way left to detect "the gesture ended" and
+ * re-enable input, permanently soft-locking every click in the scene.
+ * Raw `touchstart/move/end` listeners on the canvas element are
+ * unaffected by `scene.input.enabled` (they're plain DOM events, not
+ * routed through Phaser's InputPlugin at all), so gesture tracking keeps
+ * working right through the same window where clicks are suppressed.
+ * `scene.input.on(...)` is still used below, but only for the temporary
+ * read-only debug log — never for anything the suppression logic itself
+ * depends on.
  *
  * Deliberately NOT installed in LibraStaircaseScene — that scene is a
  * ~2s fully non-interactive scripted camera fly-through
@@ -49,10 +67,10 @@ interface TouchPoint {
  *
  * Respects `scene.input.enabled` (every scene here already uses this
  * exact flag to lock input during entry/exit camera transitions) plus
- * its own `setEnabled()` escape hatch (used by CentralHallScene to stay
- * off while the intro overlay — which isn't camera-scroll-independent —
- * is still showing), so it never needs to know about any scene's
- * specific transition/overlay logic.
+ * its own `enable()`/`disable()` escape hatch (used by CentralHallScene
+ * to stay off while the intro overlay — which isn't camera-scroll-
+ * independent — is still showing), so it never needs to know about any
+ * scene's specific transition/overlay logic.
  *
  * Click suppression model (isPinching / isDragging / suppressClicks):
  * `suppressClicks` is the ONE flag that ever touches
@@ -61,26 +79,27 @@ interface TouchPoint {
  * every touch has actually lifted (touches.size reaches 0). Earlier
  * transitions (e.g. a pinch dropping from 2 fingers to 1) only ever
  * update `isPinching`/`isDragging`, never `suppressClicks` directly —
- * this is deliberate: an earlier version of this file *did* reset a
- * "mode" flag straight to idle on that 2-to-1 transition without also
- * re-enabling input, which left every click in the scene permanently
- * dead the moment a pinch happened to end back near zoom=1. Routing
- * every re-enable through one function, gated on "zero touches remain",
- * is what actually closes that class of bug.
+ * an earlier version of this file *did* reset its gesture state straight
+ * to idle on that 2-to-1 transition without also re-enabling input, which
+ * left every click in the scene permanently dead the moment a pinch
+ * happened to end back near zoom=1. Routing every re-enable through one
+ * function, gated on "zero touches remain", is what closes that bug.
  *
  * KNOWN LIMITATION: this project's buttons/zones fire on POINTER_DOWN
- * (not a clean click-with-no-movement), so the very first touch of a
- * gesture that turns out to be a drag can still trigger whatever is
- * directly underneath it, exactly as a plain tap there always would —
- * only the *rest* of a pinch/pan gesture (and a short cooldown after
- * release) actively suppresses further clicks. Changing every scene's
- * press-to-activate convention to a release-based click model instead is
- * out of scope here.
+ * (not a clean click-with-no-movement), and Phaser dispatches a game
+ * object's own pointerdown handler before this class's DOM-level touch
+ * handler for that same physical event runs — so the very first touch of
+ * a gesture that turns out to be a pinch/drag can still trigger whatever
+ * is directly underneath it, exactly as a plain tap there always would.
+ * Only the *rest* of the gesture (and a short cooldown after release)
+ * actively suppresses further clicks. Changing every scene's press-to-
+ * activate convention to a release-based click model instead is out of
+ * scope here.
  */
 export default class MobilePinchZoom {
   private scene: Phaser.Scene;
   private canvas?: HTMLCanvasElement;
-  private enabled = true;
+  private isEnabled = true;
 
   private resetButtonContainer?: Phaser.GameObjects.Container;
 
@@ -104,7 +123,7 @@ export default class MobilePinchZoom {
   private readonly handleTouchStart = (event: TouchEvent) => this.onTouchStart(event);
   private readonly handleTouchMove = (event: TouchEvent) => this.onTouchMove(event);
   private readonly handleTouchEnd = (event: TouchEvent) => this.onTouchEnd(event);
-  private readonly handleResize = () => this.resetCamera();
+  private readonly handleResize = () => this.reset();
   private readonly handleDebugPointerDown = (pointer: Phaser.Input.Pointer) => this.logDebugPointerDown(pointer);
   private readonly handleDebugGameObjectDown = (
     pointer: Phaser.Input.Pointer,
@@ -130,17 +149,32 @@ export default class MobilePinchZoom {
     this.scene.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize);
 
     if (DEBUG_LOG_CLICKS) {
+      // Read-only diagnostics via Phaser's own input system — never part
+      // of the suppression logic itself (see the class doc comment for
+      // why that has to stay on raw DOM events instead).
       this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handleDebugPointerDown);
       this.scene.input.on(Phaser.Input.Events.GAMEOBJECT_DOWN, this.handleDebugGameObjectDown);
     }
   }
 
-  /** Used by CentralHallScene to keep this off while the intro overlay (not camera-scroll-independent) is still showing. Every other scene stays at the default (always enabled, gated only by scene.input.enabled). */
-  setEnabled(active: boolean): void {
-    this.enabled = active;
-    if (!active) {
-      this.abortGesture();
-    }
+  /** Re-arms gesture handling — the default state. Every scene except CentralHallScene never needs to call this (it's already the state `create()` leaves things in). */
+  enable(): void {
+    this.isEnabled = true;
+  }
+
+  /** Used by CentralHallScene to stay off while the intro overlay (not camera-scroll-independent) is still showing. Immediately aborts any in-flight gesture and restores input. */
+  disable(): void {
+    this.isEnabled = false;
+    this.abortGesture();
+  }
+
+  /** Public so the reset button (and anything else that needs it) can trigger the same zoom=1, re-centered, scroll-reset state. */
+  reset(): void {
+    const camera = this.scene.cameras.main;
+    camera.setZoom(MIN_ZOOM);
+    camera.centerOn(this.scene.scale.width / 2, this.scene.scale.height / 2);
+    this.positionResetButton();
+    this.updateResetButtonVisibility();
   }
 
   destroy(): void {
@@ -173,7 +207,9 @@ export default class MobilePinchZoom {
     // here ONLY to measure pinch distance/midpoint in screen space
     // (which is what a scale-ratio gesture should be measured in). Actual
     // world-space anchoring is done exclusively via camera.getWorldPoint()
-    // in updatePinch() below — never a hand-derived world formula.
+    // in updatePinch() below — never a hand-derived world formula, and
+    // never a manual clientX/clientY-vs-object-bounds hit test (Phaser's
+    // own setInteractive()/pointerdown pipeline owns all of that).
     const scaleX = this.scene.scale.width / rect.width;
     const scaleY = this.scene.scale.height / rect.height;
     for (let i = 0; i < event.touches.length; i++) {
@@ -187,7 +223,7 @@ export default class MobilePinchZoom {
   }
 
   private onTouchStart(event: TouchEvent): void {
-    if (!this.enabled || !this.scene.input.enabled) {
+    if (!this.isEnabled || !this.scene.input.enabled) {
       return;
     }
     this.touches = this.touchesFromEvent(event);
@@ -209,7 +245,7 @@ export default class MobilePinchZoom {
   }
 
   private onTouchMove(event: TouchEvent): void {
-    if (!this.enabled || this.touches.size === 0) {
+    if (!this.isEnabled || this.touches.size === 0) {
       return;
     }
     this.touches = this.touchesFromEvent(event);
@@ -239,7 +275,7 @@ export default class MobilePinchZoom {
   }
 
   private onTouchEnd(event: TouchEvent): void {
-    if (!this.enabled) {
+    if (!this.isEnabled) {
       return;
     }
     this.touches = this.touchesFromEvent(event);
@@ -306,7 +342,7 @@ export default class MobilePinchZoom {
       // screen->world conversion both before and after the zoom change
       // (camera.getWorldPoint()), never a hand-derived formula, so this
       // stays correct regardless of camera rotation/DPR. All zoom is
-      // applied only via camera.zoom / camera.scrollX / camera.scrollY —
+      // applied only via camera.setZoom() / camera.scrollX / scrollY —
       // never CSS transform, never canvas width/height.
       const worldBefore = camera.getWorldPoint(this.pinchPrevMidpoint.x, this.pinchPrevMidpoint.y);
       camera.setZoom(newZoom);
@@ -349,7 +385,7 @@ export default class MobilePinchZoom {
     });
   }
 
-  /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see setEnabled()). */
+  /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see disable()). */
   private abortGesture(): void {
     this.isPinching = false;
     this.isDragging = false;
@@ -380,10 +416,7 @@ export default class MobilePinchZoom {
 
   private logDebugGameObjectDown(_pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject): void {
     // eslint-disable-next-line no-console
-    console.log(
-      '[MobilePinchZoom] hit object:',
-      gameObject.name || gameObject.constructor.name,
-    );
+    console.log('[MobilePinchZoom] hit object:', gameObject.name || gameObject.constructor.name);
   }
 
   // ---- reset-to-100% button ------------------------------------------
@@ -405,7 +438,7 @@ export default class MobilePinchZoom {
     container.add([bg, text]);
 
     bg.setInteractive({ useHandCursor: true });
-    bg.on(Phaser.Input.Events.POINTER_DOWN, () => this.resetCamera());
+    bg.on(Phaser.Input.Events.POINTER_DOWN, () => this.reset());
 
     this.resetButtonContainer = container;
     this.positionResetButton();
@@ -426,14 +459,6 @@ export default class MobilePinchZoom {
   private updateResetButtonVisibility(): void {
     const visible = this.scene.cameras.main.zoom > RESET_BUTTON_VISIBLE_ZOOM_THRESHOLD;
     this.resetButtonContainer?.setVisible(visible);
-  }
-
-  private resetCamera(): void {
-    const camera = this.scene.cameras.main;
-    camera.setZoom(MIN_ZOOM);
-    camera.centerOn(this.scene.scale.width / 2, this.scene.scale.height / 2);
-    this.positionResetButton();
-    this.updateResetButtonVisibility();
   }
 
   private generateResetButtonTexture(): void {
