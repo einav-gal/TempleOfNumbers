@@ -1,10 +1,17 @@
 import Phaser from 'phaser';
 import { FONT_FAMILY } from './textStyle';
 
+// TEMPORARY diagnostic — logs pointer/world/camera state and the
+// clicked object's name on every pointerdown, to verify clicks actually
+// reach game objects correctly after a pinch/pan. Same on/off-flag
+// convention as EquivalencePuzzle.ts's DEBUG_LOG_SELECTION. Flip to
+// false once verified on a real device.
+const DEBUG_LOG_CLICKS = true;
+
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 2.5;
-const CLICK_DRAG_THRESHOLD_PX = 8;
-const POST_GESTURE_COOLDOWN_MS = 150;
+const CLICK_DRAG_THRESHOLD_PX = 10;
+const SUPPRESS_CLICKS_COOLDOWN_MS = 150; // within the requested 120-180ms range
 const RESET_BUTTON_VISIBLE_ZOOM_THRESHOLD = 1.05;
 
 const RESET_BUTTON_TEXTURE_KEY = 'mobile-pinch-zoom-reset-frame';
@@ -25,11 +32,14 @@ interface TouchPoint {
  * zoomed in) + a small "100%" reset button — installed identically by
  * every interactive room scene instead of duplicating this logic (see
  * CentralHallScene/PinkRoomScene/LibraRoomScene/Room3Scene). Operates
- * purely on the scene's own main camera (camera.zoom/scrollX/scrollY) —
- * this is what actually keeps Phaser's own click hit-testing correctly
- * aligned with what's visually shown, since camera-based zoom/scroll is
- * natively accounted for by Phaser's input system (unlike a CSS/browser-
- * level zoom, which it has no way to know about).
+ * purely on the scene's own main camera (camera.zoom/scrollX/scrollY,
+ * via setZoom()/direct scrollX/scrollY assignment — never CSS transform,
+ * never resizing the canvas element) — Phaser's own input system then
+ * hit-tests every ordinary game object against that same camera
+ * automatically, so nothing here does manual screen-coordinate hit
+ * testing or creates any full-viewport interactive Zone/Rectangle of its
+ * own (the only interactive object this class ever creates is the small
+ * 52x52 reset button, scrollFactor(0), positioned in a corner).
  *
  * Deliberately NOT installed in LibraStaircaseScene — that scene is a
  * ~2s fully non-interactive scripted camera fly-through
@@ -43,6 +53,20 @@ interface TouchPoint {
  * off while the intro overlay — which isn't camera-scroll-independent —
  * is still showing), so it never needs to know about any scene's
  * specific transition/overlay logic.
+ *
+ * Click suppression model (isPinching / isDragging / suppressClicks):
+ * `suppressClicks` is the ONE flag that ever touches
+ * `scene.input.enabled`, and it is only ever cleared from a SINGLE place
+ * (`stopSuppressingClicksAfterCooldown()`), itself only ever called once
+ * every touch has actually lifted (touches.size reaches 0). Earlier
+ * transitions (e.g. a pinch dropping from 2 fingers to 1) only ever
+ * update `isPinching`/`isDragging`, never `suppressClicks` directly —
+ * this is deliberate: an earlier version of this file *did* reset a
+ * "mode" flag straight to idle on that 2-to-1 transition without also
+ * re-enabling input, which left every click in the scene permanently
+ * dead the moment a pinch happened to end back near zoom=1. Routing
+ * every re-enable through one function, gated on "zero touches remain",
+ * is what actually closes that class of bug.
  *
  * KNOWN LIMITATION: this project's buttons/zones fire on POINTER_DOWN
  * (not a clean click-with-no-movement), so the very first touch of a
@@ -61,7 +85,13 @@ export default class MobilePinchZoom {
   private resetButtonContainer?: Phaser.GameObjects.Container;
 
   private touches = new Map<number, TouchPoint>();
-  private mode: 'idle' | 'pinch' | 'pan' = 'idle';
+
+  /** True only while 2+ fingers are actively being interpreted as a pinch. */
+  private isPinching = false;
+  /** True once a single-finger touch (while zoomed in) has crossed the drag threshold, or continues a pinch that dropped to one remaining finger. */
+  private isDragging = false;
+  /** The one flag that ever touches scene.input.enabled — see the class doc comment above for why it's only ever cleared in one place. */
+  private suppressClicks = false;
 
   private pinchPrevDistance = 0;
   private pinchPrevMidpoint: TouchPoint = { x: 0, y: 0 };
@@ -69,12 +99,17 @@ export default class MobilePinchZoom {
   private panPrev: TouchPoint = { x: 0, y: 0 };
   private panTravelDistance = 0;
 
-  private cooldownTimer?: Phaser.Time.TimerEvent;
+  private suppressClicksTimer?: Phaser.Time.TimerEvent;
 
   private readonly handleTouchStart = (event: TouchEvent) => this.onTouchStart(event);
   private readonly handleTouchMove = (event: TouchEvent) => this.onTouchMove(event);
   private readonly handleTouchEnd = (event: TouchEvent) => this.onTouchEnd(event);
   private readonly handleResize = () => this.resetCamera();
+  private readonly handleDebugPointerDown = (pointer: Phaser.Input.Pointer) => this.logDebugPointerDown(pointer);
+  private readonly handleDebugGameObjectDown = (
+    pointer: Phaser.Input.Pointer,
+    gameObject: Phaser.GameObjects.GameObject,
+  ) => this.logDebugGameObjectDown(pointer, gameObject);
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -93,6 +128,11 @@ export default class MobilePinchZoom {
     // main.ts, which calls game.scale.refresh() for all three) — always
     // lands back on a clean zoom=1, centered camera.
     this.scene.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize);
+
+    if (DEBUG_LOG_CLICKS) {
+      this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handleDebugPointerDown);
+      this.scene.input.on(Phaser.Input.Events.GAMEOBJECT_DOWN, this.handleDebugGameObjectDown);
+    }
   }
 
   /** Used by CentralHallScene to keep this off while the intro overlay (not camera-scroll-independent) is still showing. Every other scene stays at the default (always enabled, gated only by scene.input.enabled). */
@@ -109,7 +149,11 @@ export default class MobilePinchZoom {
     this.canvas?.removeEventListener('touchend', this.handleTouchEnd);
     this.canvas?.removeEventListener('touchcancel', this.handleTouchEnd);
     this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize);
-    this.cooldownTimer?.remove();
+    if (DEBUG_LOG_CLICKS) {
+      this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.handleDebugPointerDown);
+      this.scene.input.off(Phaser.Input.Events.GAMEOBJECT_DOWN, this.handleDebugGameObjectDown);
+    }
+    this.suppressClicksTimer?.remove();
     this.resetButtonContainer?.destroy();
   }
 
@@ -125,8 +169,11 @@ export default class MobilePinchZoom {
       return map;
     }
     // Same conversion Phaser's own InputManager uses internally — CSS
-    // touch-position -> the game's fixed 1536x1024 logical space —
-    // so this always agrees with whatever camera.getWorldPoint() expects.
+    // touch-position -> the game's fixed 1536x1024 logical space — used
+    // here ONLY to measure pinch distance/midpoint in screen space
+    // (which is what a scale-ratio gesture should be measured in). Actual
+    // world-space anchoring is done exclusively via camera.getWorldPoint()
+    // in updatePinch() below — never a hand-derived world formula.
     const scaleX = this.scene.scale.width / rect.width;
     const scaleY = this.scene.scale.height / rect.height;
     for (let i = 0; i < event.touches.length; i++) {
@@ -146,13 +193,18 @@ export default class MobilePinchZoom {
     this.touches = this.touchesFromEvent(event);
 
     if (this.touches.size >= 2) {
+      // A genuine two-finger gesture — the only case allowed to
+      // preventDefault (a single-finger touchstart never does).
       event.preventDefault();
-      this.beginPinch();
+      this.startPinch();
     } else if (this.touches.size === 1) {
       const point = [...this.touches.values()][0];
-      this.mode = 'idle';
       this.panPrev = point;
       this.panTravelDistance = 0;
+      // Deliberately NOT suppressing clicks yet, and NOT calling
+      // preventDefault — this might just be a plain tap; Phaser's own
+      // pointerdown/click handling proceeds completely normally unless
+      // and until this crosses the drag threshold below.
     }
   }
 
@@ -162,7 +214,7 @@ export default class MobilePinchZoom {
     }
     this.touches = this.touchesFromEvent(event);
 
-    if (this.mode === 'pinch') {
+    if (this.isPinching) {
       event.preventDefault();
       this.updatePinch();
       return;
@@ -171,12 +223,15 @@ export default class MobilePinchZoom {
     if (this.touches.size === 1 && this.scene.cameras.main.zoom > MIN_ZOOM + 0.001) {
       const point = [...this.touches.values()][0];
       this.panTravelDistance += Phaser.Math.Distance.Between(this.panPrev.x, this.panPrev.y, point.x, point.y);
-      if (this.mode === 'idle' && this.panTravelDistance > CLICK_DRAG_THRESHOLD_PX) {
-        this.mode = 'pan';
-        this.scene.input.enabled = false;
+      if (!this.isDragging && this.panTravelDistance > CLICK_DRAG_THRESHOLD_PX) {
+        this.isDragging = true;
+        this.startSuppressingClicks();
       }
-      if (this.mode === 'pan') {
-        event.preventDefault();
+      if (this.isDragging) {
+        // No preventDefault here — CSS `touch-action: none` on the
+        // canvas already keeps the browser from doing anything with a
+        // single-finger drag; a genuine two-finger gesture is the only
+        // case this class ever calls preventDefault for.
         this.panCameraBy(point.x - this.panPrev.x, point.y - this.panPrev.y);
       }
       this.panPrev = point;
@@ -192,31 +247,43 @@ export default class MobilePinchZoom {
     if (this.touches.size >= 2) {
       // Still mid-pinch with the remaining fingers — re-anchor so the
       // next move isn't measured against a now-lifted touch.
-      this.beginPinch();
+      this.startPinch();
       return;
     }
-    if (this.touches.size === 1 && this.mode === 'pinch') {
-      // Dropped from 2 fingers to 1 — settle into a single-finger pan
-      // from here rather than ending the whole gesture outright.
+
+    if (this.isPinching && this.touches.size === 1) {
+      // Dropped from 2 fingers to 1. isPinching ends here, but
+      // `suppressClicks` is deliberately left untouched (it was already
+      // true from startPinch() and is only ever cleared once ALL touches
+      // are gone — see stopSuppressingClicksAfterCooldown()) — this is
+      // exactly the fix for the bug described in the class doc comment.
+      this.isPinching = false;
       const point = [...this.touches.values()][0];
-      this.mode = this.scene.cameras.main.zoom > MIN_ZOOM + 0.001 ? 'pan' : 'idle';
       this.panPrev = point;
       this.panTravelDistance = CLICK_DRAG_THRESHOLD_PX + 1; // already a real gesture, not a fresh tap candidate
+      if (this.scene.cameras.main.zoom > MIN_ZOOM + 0.001) {
+        this.isDragging = true;
+      }
       return;
     }
+
     if (this.touches.size === 0) {
-      this.endGesture();
+      this.isPinching = false;
+      this.isDragging = false;
+      if (this.suppressClicks) {
+        this.stopSuppressingClicksAfterCooldown();
+      }
+      this.updateResetButtonVisibility();
     }
   }
 
-  private beginPinch(): void {
+  private startPinch(): void {
     const points = [...this.touches.values()];
     if (points.length < 2) {
       return;
     }
-    this.mode = 'pinch';
-    this.scene.input.enabled = false;
-    this.cooldownTimer?.remove();
+    this.isPinching = true;
+    this.startSuppressingClicks();
     this.pinchPrevDistance = Phaser.Math.Distance.Between(points[0].x, points[0].y, points[1].x, points[1].y);
     this.pinchPrevMidpoint = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
   }
@@ -236,11 +303,13 @@ export default class MobilePinchZoom {
 
       // Keep the world point that was under the fingers a moment ago
       // anchored at the SAME screen position — using Phaser's own
-      // screen->world conversion both before and after the zoom change,
-      // never a hand-derived formula, so this stays correct regardless
-      // of camera rotation/DPR.
+      // screen->world conversion both before and after the zoom change
+      // (camera.getWorldPoint()), never a hand-derived formula, so this
+      // stays correct regardless of camera rotation/DPR. All zoom is
+      // applied only via camera.zoom / camera.scrollX / camera.scrollY —
+      // never CSS transform, never canvas width/height.
       const worldBefore = camera.getWorldPoint(this.pinchPrevMidpoint.x, this.pinchPrevMidpoint.y);
-      camera.zoom = newZoom;
+      camera.setZoom(newZoom);
       const worldAfterZoomOnly = camera.getWorldPoint(this.pinchPrevMidpoint.x, this.pinchPrevMidpoint.y);
       camera.scrollX += worldBefore.x - worldAfterZoomOnly.x;
       camera.scrollY += worldBefore.y - worldAfterZoomOnly.y;
@@ -263,30 +332,58 @@ export default class MobilePinchZoom {
     camera.scrollY -= dyScreen / camera.zoom;
   }
 
-  private endGesture(): void {
-    const wasGesture = this.mode !== 'idle';
-    this.mode = 'idle';
-    this.touches.clear();
-    if (wasGesture) {
-      // A trailing click, if any, can still land a moment after release
-      // on some browsers — keep input suppressed a little past it.
-      this.cooldownTimer?.remove();
-      this.cooldownTimer = this.scene.time.delayedCall(POST_GESTURE_COOLDOWN_MS, () => {
-        this.scene.input.enabled = true;
-      });
-    }
-    this.updateResetButtonVisibility();
+  // ---- click suppression (the ONLY code that ever touches scene.input.enabled) ----
+
+  private startSuppressingClicks(): void {
+    this.suppressClicksTimer?.remove();
+    this.suppressClicks = true;
+    this.scene.input.enabled = false;
   }
 
-  /** Cancels any in-flight gesture and restores scene.input immediately — used when this whole controller is disabled mid-gesture (see setEnabled()). */
+  /** The single place suppressClicks/scene.input.enabled are ever restored — only ever called once every touch has actually lifted (see onTouchEnd()'s touches.size===0 branch and abortGesture()). */
+  private stopSuppressingClicksAfterCooldown(): void {
+    this.suppressClicksTimer?.remove();
+    this.suppressClicksTimer = this.scene.time.delayedCall(SUPPRESS_CLICKS_COOLDOWN_MS, () => {
+      this.suppressClicks = false;
+      this.scene.input.enabled = true;
+    });
+  }
+
+  /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see setEnabled()). */
   private abortGesture(): void {
-    const wasGesture = this.mode !== 'idle';
-    this.mode = 'idle';
+    this.isPinching = false;
+    this.isDragging = false;
     this.touches.clear();
-    this.cooldownTimer?.remove();
-    if (wasGesture) {
+    this.suppressClicksTimer?.remove();
+    if (this.suppressClicks) {
+      this.suppressClicks = false;
       this.scene.input.enabled = true;
     }
+  }
+
+  // ---- temporary debug logging ----------------------------------------
+
+  private logDebugPointerDown(pointer: Phaser.Input.Pointer): void {
+    const camera = this.scene.cameras.main;
+    // eslint-disable-next-line no-console
+    console.log('[MobilePinchZoom] pointerdown', {
+      scene: this.scene.scene.key,
+      pointerX: pointer.x,
+      pointerY: pointer.y,
+      worldX: pointer.worldX,
+      worldY: pointer.worldY,
+      zoom: camera.zoom,
+      scrollX: camera.scrollX,
+      scrollY: camera.scrollY,
+    });
+  }
+
+  private logDebugGameObjectDown(_pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject): void {
+    // eslint-disable-next-line no-console
+    console.log(
+      '[MobilePinchZoom] hit object:',
+      gameObject.name || gameObject.constructor.name,
+    );
   }
 
   // ---- reset-to-100% button ------------------------------------------
