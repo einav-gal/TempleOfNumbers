@@ -3,6 +3,7 @@ import backgroundUrl from '../../assets/images/LibraRoom/Background_Libra.png';
 import Doorway from '../game/Doorway';
 import LibraPuzzle from '../game/LibraPuzzle';
 import CrystalHolder from '../game/CrystalHolder';
+import MobilePinchZoom from '../game/MobilePinchZoom';
 import { getLibraRoomState } from '../game/GameState';
 
 const BACKGROUND_KEY = 'libra-room-background';
@@ -45,6 +46,7 @@ export default class LibraRoomScene extends Phaser.Scene {
   private exit?: Doorway;
   private puzzle?: LibraPuzzle;
   private crystalHolder?: CrystalHolder;
+  private pinchZoom?: MobilePinchZoom;
   private overlay?: Phaser.GameObjects.Rectangle;
   private backgroundScale = 1;
   private isReturning = false;
@@ -101,6 +103,9 @@ export default class LibraRoomScene extends Phaser.Scene {
     this.crystalHolder.create(OVERLAY_DEPTH - 10);
     this.puzzle.crystalHolder = this.crystalHolder;
 
+    this.pinchZoom = new MobilePinchZoom(this);
+    this.pinchZoom.create();
+
     if (getLibraRoomState(this.registry).completed) {
       this.puzzle.restoreCompleted();
       this.exit.setActive(true);
@@ -117,6 +122,7 @@ export default class LibraRoomScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
       this.puzzle?.destroy();
       this.crystalHolder?.destroy();
+      this.pinchZoom?.destroy();
     });
 
     this.playEntryAnimation();

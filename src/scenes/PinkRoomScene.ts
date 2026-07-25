@@ -4,6 +4,7 @@ import PinkCrystal from '../game/PinkCrystal';
 import Doorway from '../game/Doorway';
 import EquivalencePuzzle from '../game/EquivalencePuzzle';
 import CrystalHolder from '../game/CrystalHolder';
+import MobilePinchZoom from '../game/MobilePinchZoom';
 import { getPinkRoomState } from '../game/GameState';
 
 const BACKGROUND_KEY = 'pink-room-background';
@@ -55,6 +56,7 @@ export default class PinkRoomScene extends Phaser.Scene {
   private puzzle?: EquivalencePuzzle;
   private exit?: Doorway;
   private crystalHolder?: CrystalHolder;
+  private pinchZoom?: MobilePinchZoom;
   private overlay?: Phaser.GameObjects.Rectangle;
   private backgroundScale = 1;
   private isReturning = false;
@@ -90,6 +92,9 @@ export default class PinkRoomScene extends Phaser.Scene {
       this.puzzle.crystalHolder = this.crystalHolder;
     }
 
+    this.pinchZoom = new MobilePinchZoom(this);
+    this.pinchZoom.create();
+
     this.layout(this.scale.width, this.scale.height);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -97,6 +102,7 @@ export default class PinkRoomScene extends Phaser.Scene {
       this.crystal?.destroy();
       this.puzzle?.destroy();
       this.crystalHolder?.destroy();
+      this.pinchZoom?.destroy();
     });
 
     this.playEntryAnimation();

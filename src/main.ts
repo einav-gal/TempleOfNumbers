@@ -13,15 +13,6 @@ const ENTER_FULLSCREEN_LABEL = 'מסך מלא';
 const EXIT_FULLSCREEN_ICON = '⤡';
 const EXIT_FULLSCREEN_LABEL = 'יציאה ממסך מלא';
 
-// Pinch-zoom support while the Fullscreen API is active is entirely
-// browser-dependent (some browsers restrict it) — this is shown once,
-// right as fullscreen is entered, so the player isn't surprised if
-// two-finger zoom stops responding there; it never blocks or delays the
-// fullscreen request itself.
-const FULLSCREEN_ZOOM_NOTE_TEXT = 'במסך מלא ייתכן שלא ניתן להגדיל בשתי אצבעות';
-const FULLSCREEN_ZOOM_NOTE_DURATION_MS = 3000;
-let fullscreenToastTimeoutId: number | undefined;
-
 // A phone held sideways is short and very wide (e.g. 915x412) — much
 // wider than the game's own 1536x1024 (1.5:1) design ratio. FIT would
 // then be constrained by the (relatively short) height, leaving big
@@ -54,19 +45,6 @@ async function boot(): Promise<void> {
       width: 1536,
       height: 1024,
       expandParent: true,
-    },
-    // By default Phaser calls preventDefault() on every touch event over
-    // the canvas — unconditionally, including for two-finger touches,
-    // which would silently swallow pinch-zoom before the browser ever
-    // sees it. The CSS `touch-action: pan-x pan-y pinch-zoom` rule in
-    // index.html already declares the intended touch behavior correctly
-    // (and leaves pinch-zoom alone), so Phaser's own JS-level capture is
-    // redundant — disabling it is what actually lets two-finger zoom
-    // reach the browser.
-    input: {
-      touch: {
-        capture: false,
-      },
     },
     scene: [
   CentralHallScene,
@@ -117,9 +95,12 @@ async function boot(): Promise<void> {
 }
 
 // A small, always-present HTML button (not a per-scene Phaser control —
-// see index.html) — the game always starts in normal browser view (where
-// pinch-zoom is guaranteed to work), and this is the only way in or out
-// of fullscreen, regardless of which scene is currently active.
+// see index.html) — the intro's own "כניסה למקדש" button already requests
+// fullscreen once on first entry (see IntroOverlay.dismiss()), and this
+// is the only way back out of it (or back in, if it was ever left),
+// regardless of which scene is currently active. Pinch-zoom no longer
+// depends on staying out of fullscreen — see MobilePinchZoom.ts, which
+// zooms via the Phaser camera instead of the browser.
 function setUpFullscreenToggleButton(game: Phaser.Game): void {
   const button = document.getElementById('fullscreen-toggle');
   const icon = document.getElementById('fullscreen-toggle-icon');
@@ -143,9 +124,6 @@ function setUpFullscreenToggleButton(game: Phaser.Game): void {
   };
 
   button.addEventListener('click', () => {
-    if (!isGameFullscreen()) {
-      showFullscreenZoomNote();
-    }
     toggleGameFullscreen();
   });
 
@@ -160,19 +138,6 @@ function setUpFullscreenToggleButton(game: Phaser.Game): void {
   });
 
   updateButtonForCurrentState();
-}
-
-function showFullscreenZoomNote(): void {
-  const toast = document.getElementById('fullscreen-toast');
-  if (!toast) {
-    return;
-  }
-  window.clearTimeout(fullscreenToastTimeoutId);
-  toast.textContent = FULLSCREEN_ZOOM_NOTE_TEXT;
-  toast.classList.add('visible');
-  fullscreenToastTimeoutId = window.setTimeout(() => {
-    toast.classList.remove('visible');
-  }, FULLSCREEN_ZOOM_NOTE_DURATION_MS);
 }
 
 void boot();

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>Temple of the Lost Numbers</title>
     <!-- Bellefair: the game's one shared font, Hebrew + Latin alike (see src/game/textStyle.ts). Regular weight only. -->
@@ -22,17 +22,22 @@
         background: #000;
       }
 
-      /* Explicit (not the `manipulation` shorthand) so it's unambiguous
-         pinch-zoom is preserved everywhere the game itself is shown —
-         html/body never actually scroll (nothing overflows a
-         position:fixed, viewport-sized #game), so allowing pan-x/pan-y
-         here costs nothing while matching the most broadly-tested
-         touch-action value combination across browsers. */
+      /* Browser-level pinch-zoom is no longer how the player zooms —
+         MobilePinchZoom.ts implements it entirely inside Phaser instead
+         (camera.zoom + scroll), which is what actually keeps click
+         hit-testing aligned with what's visually shown, and works
+         identically in and out of fullscreen. So the canvas itself opts
+         fully OUT of native browser gestures (no page-zoom, no
+         page-pan starting there) — everything two-finger on it is ours
+         to interpret. html/body keep the standard `manipulation` value
+         (they never actually scroll — nothing overflows a
+         position:fixed, viewport-sized #game — this only disables
+         double-tap-zoom outside the canvas). The HTML fullscreen button
+         is untouched (see its own rule below) so it stays a normal,
+         responsive tap target. */
       html,
-      body,
-      #game,
-      #game canvas {
-        touch-action: pan-x pan-y pinch-zoom;
+      body {
+        touch-action: manipulation;
       }
 
       /* No wrapper around #game carries its own max-width/padding/margin
@@ -67,6 +72,7 @@
       #game canvas {
         display: block;
         margin: 0 auto;
+        touch-action: none;
       }
 
       /* True (OS-level) fullscreen — requested from the intro's own
@@ -93,7 +99,7 @@
          src/main.ts) rather than left as a dead button. Kept clear of
          notches/rounded corners/home-indicator via the safe-area insets,
          never as padding on #game itself (that would shrink the canvas).
-         Sized above the 48x48px minimum comfortable touch target, and
+         At least 56x56px (a large, comfortable mobile touch target), and
          given its own stacking context (fixed + z-index) so it's always
          above the canvas regardless of DOM order. */
       #fullscreen-toggle {
@@ -101,12 +107,12 @@
         top: calc(env(safe-area-inset-top, 0px) + 10px);
         right: calc(env(safe-area-inset-right, 0px) + 10px);
         z-index: 10000;
-        width: 52px;
-        height: 52px;
-        min-width: 48px;
-        min-height: 48px;
+        width: 56px;
+        height: 56px;
+        min-width: 56px;
+        min-height: 56px;
         padding: 0;
-        border-radius: 10px;
+        border-radius: 12px;
         border: 1px solid rgba(255, 255, 255, 0.35);
         background: rgba(0, 0, 0, 0.5);
         color: #f2e9d8;
@@ -121,32 +127,6 @@
 
       #fullscreen-toggle:hover {
         background: rgba(0, 0, 0, 0.7);
-      }
-
-      /* Brief informational toast (see showFullscreenToast() in main.ts) —
-         shown only when actually entering fullscreen, since pinch-zoom
-         support while fullscreen is browser-dependent. */
-      #fullscreen-toast {
-        position: fixed;
-        top: calc(env(safe-area-inset-top, 0px) + 68px);
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 10001;
-        max-width: min(90vw, 440px);
-        padding: 10px 18px;
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.82);
-        color: #f2e9d8;
-        font-family: 'Bellefair', serif;
-        font-size: 15px;
-        text-align: center;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.25s ease;
-      }
-
-      #fullscreen-toast.visible {
-        opacity: 1;
       }
 
       /* Portrait-only prompt to rotate — pure CSS, so it appears/disappears
@@ -185,7 +165,6 @@
     <button id="fullscreen-toggle" type="button" aria-label="מסך מלא" title="מסך מלא">
       <span id="fullscreen-toggle-icon" aria-hidden="true">⛶</span>
     </button>
-    <div id="fullscreen-toast" role="status" aria-live="polite"></div>
     <div id="rotate-overlay">
       <p>סובבו את המכשיר למצב מאוזן</p>
     </div>

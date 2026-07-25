@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import introTorchUrl from '../../assets/images/central-hall/intro-torch.png';
 import { FONT_FAMILY } from './textStyle';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
+import { requestGameFullscreen } from '../fullscreen';
 
 const OVERLAY_ALPHA = 0.72;
 const FADE_OUT_MS = 500;
@@ -628,10 +629,13 @@ export default class IntroOverlay {
     if (!this.container) {
       return;
     }
-    // Deliberately does NOT request fullscreen here — the game always
-    // starts in normal browser view, where pinch-zoom is guaranteed to
-    // work. Fullscreen is opt-in only, via the dedicated toggle button
-    // (see index.html/main.ts).
+    // Best-effort, feature-detected, never blocks the dismiss itself —
+    // called synchronously from this same click so it still counts as a
+    // user gesture. Pinch-zoom no longer depends on staying in normal
+    // browser view (see MobilePinchZoom.ts — zooming is now done entirely
+    // in-game, via the camera, so it works identically in and out of
+    // fullscreen), so there's no longer a reason to hold off here.
+    requestGameFullscreen();
     this.buttonBg?.disableInteractive();
     for (const glow of this.glows) {
       glow.tween?.stop();

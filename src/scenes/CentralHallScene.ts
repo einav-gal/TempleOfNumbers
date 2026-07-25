@@ -13,6 +13,7 @@ import FloorEntrance from '../game/FloorEntrance';
 import IntroOverlay from '../game/IntroOverlay';
 import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
+import MobilePinchZoom from '../game/MobilePinchZoom';
 import { hasSeenGameIntro, markGameIntroSeen } from '../game/GameState';
 import { FONT_FAMILY } from '../game/textStyle';
 import handleUrl from '../../assets/images/central-hall/handle/handle.png';
@@ -170,6 +171,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private intro?: IntroOverlay;
   private crystalHolder?: CrystalHolder;
   private wallWheel?: WallWheel;
+  private pinchZoom?: MobilePinchZoom;
   // Independent per-destination transition guards — never one shared
   // lock. Each is reset to false at the top of create() (Phaser reuses
   // this Scene instance across stop()/start(), so without the reset a
@@ -246,6 +248,13 @@ export default class CentralHallScene extends Phaser.Scene {
     this.crystalHolder = new CrystalHolder(this);
     this.crystalHolder.create(OVERLAY_DEPTH - 10);
 
+    // Kept off while the intro overlay is showing (see below) — that
+    // overlay isn't camera-scroll-independent, so pinching underneath it
+    // would visually misalign it; every other interaction here already
+    // gates on it having been dismissed.
+    this.pinchZoom = new MobilePinchZoom(this);
+    this.pinchZoom.create();
+
     this.heart = new HeartOfTheTemple(this);
     this.heart.create();
     this.heart.onCrystalClick = () => this.openPopup();
@@ -320,6 +329,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.heart.setSuppressed(true);
       this.leftDoorway.setActive(false);
       this.pot.setActive(false);
+      this.pinchZoom?.setEnabled(false);
 
       this.intro = new IntroOverlay(this);
       this.intro.create();
@@ -328,6 +338,7 @@ export default class CentralHallScene extends Phaser.Scene {
         this.heart?.setSuppressed(false);
         this.leftDoorway?.setActive(true);
         this.pot?.setActive(true);
+        this.pinchZoom?.setEnabled(true);
       };
     }
 
@@ -361,6 +372,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.floorEntrance?.destroy();
       this.crystalHolder?.destroy();
       this.wallWheel?.destroy();
+      this.pinchZoom?.destroy();
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);

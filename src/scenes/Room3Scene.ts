@@ -6,6 +6,7 @@ import CrystalHolder from '../game/CrystalHolder';
 import MapFractionPuzzle from '../game/MapFractionPuzzle';
 import { createRtlText } from '../game/rtlText';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from '../game/scaleMode';
+import MobilePinchZoom from '../game/MobilePinchZoom';
 
 const BACKGROUND_KEY = 'room3-background';
 const OVERLAY_DEPTH = 90;
@@ -108,6 +109,7 @@ export default class Room3Scene extends Phaser.Scene {
   private bigCrystalBaseScaleY = 1;
   private pedestalImage?: Phaser.GameObjects.Image;
   private pedestalShadow?: Phaser.GameObjects.Graphics;
+  private pinchZoom?: MobilePinchZoom;
   private overlay?: Phaser.GameObjects.Rectangle;
   private backgroundScale = 1;
   private isReturning = false;
@@ -189,6 +191,9 @@ export default class Room3Scene extends Phaser.Scene {
       .setAlpha(ENTRY_START_OVERLAY_ALPHA)
       .setScrollFactor(0);
 
+    this.pinchZoom = new MobilePinchZoom(this);
+    this.pinchZoom.create();
+
     this.layout(this.scale.width, this.scale.height);
     this.startCrystalHover();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
@@ -196,6 +201,7 @@ export default class Room3Scene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
       this.crystalHolder?.destroy();
       this.mapPuzzle?.destroy();
+      this.pinchZoom?.destroy();
       this.bigCrystalGlowTween?.stop();
       this.bigCrystalFloatTween?.stop();
       this.bigCrystalPulseTween?.stop();
