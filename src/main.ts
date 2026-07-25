@@ -6,6 +6,7 @@ import PinkRoomScene from './scenes/PinkRoomScene';
 import LibraRoomScene from './scenes/LibraRoomScene';
 import LibraStaircaseScene from './scenes/LibraStaircaseScene';
 import Room3Scene from './scenes/Room3Scene';
+import { isFullscreenSupported, isGameFullscreen, toggleGameFullscreen } from './fullscreen';
 
 // A phone held sideways is short and very wide (e.g. 915x412) — much
 // wider than the game's own 1536x1024 (1.5:1) design ratio. FIT would
@@ -40,6 +41,20 @@ async function boot(): Promise<void> {
       height: 1024,
       expandParent: true,
     },
+    // By default Phaser calls preventDefault() on every touch event over
+    // the canvas (to stop the browser's own scroll/pan gesture) — but it
+    // does this unconditionally, including for two-finger touches, which
+    // would silently swallow pinch-zoom before the browser ever sees it.
+    // The CSS touch-action rules in index.html (pinch-zoom on #game/
+    // canvas, manipulation on html/body) already do the same
+    // single-finger-pan prevention declaratively and correctly leave
+    // pinch-zoom alone, so Phaser's own JS-level capture is redundant —
+    // disabling it is what actually lets two-finger zoom reach the browser.
+    input: {
+      touch: {
+        capture: false,
+      },
+    },
     scene: [
   CentralHallScene,
   PuzzlePlaceholderScene,
@@ -70,6 +85,31 @@ async function boot(): Promise<void> {
   // against those stale values.
   window.addEventListener('orientationchange', () => {
     window.setTimeout(applyScaleModeForViewport, 100);
+  });
+
+  setUpFullscreenToggleButton();
+}
+
+// A small, always-present HTML button (not a per-scene Phaser control —
+// see index.html) so the player can re-enter fullscreen after leaving it
+// (browser UI, the OS back gesture, etc.) regardless of which scene is
+// currently active. The intro overlay's own "כניסה למקדש" button also
+// requests fullscreen once, on first entry (see IntroOverlay.dismiss());
+// this button covers every case after that.
+function setUpFullscreenToggleButton(): void {
+  const button = document.getElementById('fullscreen-toggle');
+  if (!button) {
+    return;
+  }
+  if (!isFullscreenSupported()) {
+    button.style.display = 'none';
+    return;
+  }
+  button.addEventListener('click', () => {
+    toggleGameFullscreen();
+  });
+  document.addEventListener('fullscreenchange', () => {
+    button.setAttribute('aria-pressed', String(isGameFullscreen()));
   });
 }
 
