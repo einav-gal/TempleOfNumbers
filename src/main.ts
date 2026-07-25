@@ -87,6 +87,19 @@ async function boot(): Promise<void> {
     const mode = scaleModeForViewport();
     if (game.scale.scaleMode !== mode) {
       game.scale.scaleMode = mode;
+      // The ROOT FIX: Phaser only ever reads `displaySize.aspectMode` (a
+      // separate internal Size component) to decide whether to fit-inside
+      // or cover-and-crop — and it only copies `scaleMode` into that
+      // aspectMode once, during the Scale Manager's own one-time boot().
+      // Setting `game.scale.scaleMode` alone (as this used to do) changes
+      // a label that nothing downstream ever reads again; without this
+      // line the game stayed visually stuck in whichever mode was active
+      // at the very first page load — e.g. small/letterboxed FIT forever,
+      // even after rotating into short-landscape and "switching" to
+      // ENVELOP — which is exactly the "tiny in normal view, only big in
+      // fullscreen" symptom (fullscreen just made the still-FIT layout
+      // bigger, never actually enveloping/cropping to fill the width).
+      game.scale.displaySize.setAspectMode(mode);
     }
     game.scale.refresh();
   };
