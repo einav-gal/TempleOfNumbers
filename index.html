@@ -129,6 +129,51 @@
         background: rgba(0, 0, 0, 0.7);
       }
 
+      /* Global "reset zoom" control — a plain HTML element over the
+         canvas, never a Phaser object/Zone (see MobilePinchZoom.ts,
+         which no longer creates any interactive Phaser object of its
+         own). Hidden by default; main.ts polls the active scene's
+         MobilePinchZoom.isZoomedOrPanned() and toggles `.visible` on/off
+         — it only ever shows once zoom/pan is actually active. Opposite
+         corner from the fullscreen toggle so the two never crowd each
+         other; same size/safe-area treatment. */
+      #zoom-reset-toggle {
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 10px);
+        left: calc(env(safe-area-inset-left, 0px) + 10px);
+        z-index: 10000;
+        width: 56px;
+        height: 56px;
+        min-width: 56px;
+        min-height: 56px;
+        padding: 0;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.5);
+        color: #f2e9d8;
+        font-size: 15px;
+        font-family: 'Bellefair', serif;
+        line-height: 1.15;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        cursor: pointer;
+        touch-action: manipulation;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+      }
+
+      #zoom-reset-toggle.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #zoom-reset-toggle:hover {
+        background: rgba(0, 0, 0, 0.7);
+      }
+
       /* Portrait-only prompt to rotate — pure CSS, so it appears/disappears
          immediately on rotation with no JS orientation listener needed. */
       #rotate-overlay {
@@ -140,7 +185,8 @@
           display: flex;
         }
 
-        #fullscreen-toggle {
+        #fullscreen-toggle,
+        #zoom-reset-toggle {
           display: none;
         }
       }
@@ -165,6 +211,7 @@
     <button id="fullscreen-toggle" type="button" aria-label="מסך מלא" title="מסך מלא">
       <span id="fullscreen-toggle-icon" aria-hidden="true">⛶</span>
     </button>
+    <button id="zoom-reset-toggle" type="button" aria-label="איפוס זום" title="איפוס זום">איפוס<br />זום</button>
     <div id="rotate-overlay">
       <p>סובבו את המכשיר למצב מאוזן</p>
     </div>

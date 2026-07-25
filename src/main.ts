@@ -7,6 +7,9 @@ import LibraRoomScene from './scenes/LibraRoomScene';
 import LibraStaircaseScene from './scenes/LibraStaircaseScene';
 import Room3Scene from './scenes/Room3Scene';
 import { isFullscreenSupported, isGameFullscreen, toggleGameFullscreen } from './fullscreen';
+import MobilePinchZoom from './game/MobilePinchZoom';
+
+const ZOOM_RESET_POLL_MS = 200;
 
 const ENTER_FULLSCREEN_ICON = '⛶';
 const ENTER_FULLSCREEN_LABEL = 'מסך מלא';
@@ -101,6 +104,30 @@ async function boot(): Promise<void> {
   });
 
   setUpFullscreenToggleButton(game);
+  setUpZoomResetButton();
+}
+
+// A small, always-present HTML button (never a Phaser object — see
+// MobilePinchZoom.ts, which no longer creates any interactive Phaser
+// object of its own) that resets whichever scene's camera is currently
+// zoomed/panned. Only ever one scene is actually running at a time, so
+// MobilePinchZoom.getActive() is unambiguous; a lightweight poll (rather
+// than a bespoke event) is enough for a pure show/hide toggle like this.
+function setUpZoomResetButton(): void {
+  const button = document.getElementById('zoom-reset-toggle');
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener('click', () => {
+    MobilePinchZoom.getActive()?.reset();
+    button.classList.remove('visible');
+  });
+
+  window.setInterval(() => {
+    const active = MobilePinchZoom.getActive();
+    button.classList.toggle('visible', !!active && active.isZoomedOrPanned());
+  }, ZOOM_RESET_POLL_MS);
 }
 
 // A small, always-present HTML button (not a per-scene Phaser control —

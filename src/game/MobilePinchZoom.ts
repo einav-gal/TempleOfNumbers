@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { FONT_FAMILY } from './textStyle';
 
 // TEMPORARY diagnostic — logs pointer/world/camera state and the
 // clicked object's name on every pointerdown, to verify clicks actually
@@ -12,15 +11,7 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 2.5;
 const CLICK_DRAG_THRESHOLD_PX = 10;
 const SUPPRESS_CLICKS_COOLDOWN_MS = 150; // within the requested 120-180ms range
-const RESET_BUTTON_VISIBLE_ZOOM_THRESHOLD = 1.05;
-
-const RESET_BUTTON_TEXTURE_KEY = 'mobile-pinch-zoom-reset-frame';
-const RESET_BUTTON_SIZE_PX = 52;
-const RESET_BUTTON_MARGIN_PX = 18;
-// Comfortably above every other depth used anywhere in this project
-// (the highest otherwise is CentralHallScene's own info popup at 100)
-// so the reset button always sits on top of ordinary scene content.
-const RESET_BUTTON_DEPTH = 5000;
+const ZOOM_ACTIVE_THRESHOLD = 1.05;
 
 interface TouchPoint {
   x: number;
@@ -29,17 +20,19 @@ interface TouchPoint {
 
 /**
  * Shared, per-scene two-finger pinch-to-zoom + one-finger pan (while
- * zoomed in) + a small "100%" reset button — installed identically by
- * every interactive room scene instead of duplicating this logic (see
- * CentralHallScene/PinkRoomScene/LibraRoomScene/Room3Scene). All zoom is
- * `camera.setZoom()` + direct `camera.scrollX`/`scrollY` assignment —
- * never CSS transform, never resizing the canvas element, never a
- * browser-level zoom. Phaser's own input system then hit-tests every
- * ordinary game object against that same camera automatically, so
- * nothing here does manual screen-coordinate hit testing, and the only
- * interactive object this class ever creates is the small 52x52 reset
- * button (`scrollFactor(0)`) — never a full-viewport Zone/Rectangle that
- * could sit above (and swallow clicks meant for) ordinary scene content.
+ * zoomed in) — installed identically by every interactive room scene
+ * instead of duplicating this logic (see CentralHallScene/PinkRoomScene/
+ * LibraRoomScene/Room3Scene). All zoom is `camera.setZoom()` + direct
+ * `camera.scrollX`/`scrollY` assignment — never CSS transform, never
+ * resizing the canvas element, never a browser-level zoom. Phaser's own
+ * input system then hit-tests every ordinary game object against that
+ * same camera automatically, so nothing here does manual screen-
+ * coordinate hit testing, and this class never creates ANY interactive
+ * Phaser object of its own (not even a small one) — the single global
+ * "reset zoom" control is a plain HTML button over the canvas (see
+ * index.html / main.ts), which reads/drives this class only through
+ * `MobilePinchZoom.getActive()` (the currently-active scene's instance)
+ * and never touches Phaser's input system at all.
  *
  * WHY THIS LISTENS VIA RAW DOM TOUCH EVENTS, NOT `scene.input.on(...)`:
  * the natural design would be to track the pinch/pan gesture itself via
@@ -97,11 +90,16 @@ interface TouchPoint {
  * scope here.
  */
 export default class MobilePinchZoom {
+  /** The currently active scene's instance — the global HTML "reset zoom" button (see main.ts) reads/drives this, never a specific scene directly. Only ever one scene is actually running at a time in this game, so "the active instance" is unambiguous. */
+  private static activeInstance: MobilePinchZoom | undefined;
+
+  static getActive(): MobilePinchZoom | undefined {
+    return MobilePinchZoom.activeInstance;
+  }
+
   private scene: Phaser.Scene;
   private canvas?: HTMLCanvasElement;
   private isEnabled = true;
-
-  private resetButtonContainer?: Phaser.GameObjects.Container;
 
   private touches = new Map<number, TouchPoint>();
 
@@ -123,7 +121,11 @@ export default class MobilePinchZoom {
   private readonly handleTouchStart = (event: TouchEvent) => this.onTouchStart(event);
   private readonly handleTouchMove = (event: TouchEvent) => this.onTouchMove(event);
   private readonly handleTouchEnd = (event: TouchEvent) => this.onTouchEnd(event);
-  private readonly handleResize = () => this.reset();
+  // Deliberately does NOT call scale.refresh() itself — it runs AS A
+  // RESULT of one (see the RESIZE listener in create()), so doing so
+  // again here would recurse. The public reset() below is the one that
+  // also triggers a refresh, for external callers (the HTML button).
+  private readonly handleResize = () => this.resetCameraAndGestureState();
   private readonly handleDebugPointerDown = (pointer: Phaser.Input.Pointer) => this.logDebugPointerDown(pointer);
   private readonly handleDebugGameObjectDown = (
     pointer: Phaser.Input.Pointer,
@@ -141,8 +143,6 @@ export default class MobilePinchZoom {
     this.canvas.addEventListener('touchend', this.handleTouchEnd, { passive: false });
     this.canvas.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
 
-    this.createResetButton();
-
     // Any refresh — rotation, fullscreen toggle, or a generic resize (see
     // main.ts, which calls game.scale.refresh() for all three) — always
     // lands back on a clean zoom=1, centered camera.
@@ -155,6 +155,12 @@ export default class MobilePinchZoom {
       this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handleDebugPointerDown);
       this.scene.input.on(Phaser.Input.Events.GAMEOBJECT_DOWN, this.handleDebugGameObjectDown);
     }
+
+    // This scene is now "the" active one for the global reset button.
+    MobilePinchZoom.activeInstance = this;
+    // Guarantees a clean starting camera regardless of any leftover state
+    // from a previous visit to this same (Phaser-reused) Scene instance.
+    this.resetCameraAndGestureState();
   }
 
   /** Re-arms gesture handling — the default state. Every scene except CentralHallScene never needs to call this (it's already the state `create()` leaves things in). */
@@ -168,13 +174,23 @@ export default class MobilePinchZoom {
     this.abortGesture();
   }
 
-  /** Public so the reset button (and anything else that needs it) can trigger the same zoom=1, re-centered, scroll-reset state. */
+  /** Whether the "reset zoom" control should currently be visible — the global HTML button (see main.ts) polls this. */
+  isZoomedOrPanned(): boolean {
+    return this.scene.cameras.main.zoom > ZOOM_ACTIVE_THRESHOLD;
+  }
+
+  /**
+   * Full reset, safe to call from anywhere (including the global HTML
+   * button, entirely outside Phaser): stops any active pinch/pan,
+   * zeroes isPinching/isDragging/suppressClicks and every tracked
+   * pointer, snaps the camera back to zoom=1 centered on the scene's
+   * original framing, and finally asks the Scale Manager to refresh —
+   * so every clickable area is guaranteed to line back up exactly where
+   * it's drawn.
+   */
   reset(): void {
-    const camera = this.scene.cameras.main;
-    camera.setZoom(MIN_ZOOM);
-    camera.centerOn(this.scene.scale.width / 2, this.scene.scale.height / 2);
-    this.positionResetButton();
-    this.updateResetButtonVisibility();
+    this.resetCameraAndGestureState();
+    this.scene.scale.refresh();
   }
 
   destroy(): void {
@@ -188,7 +204,9 @@ export default class MobilePinchZoom {
       this.scene.input.off(Phaser.Input.Events.GAMEOBJECT_DOWN, this.handleDebugGameObjectDown);
     }
     this.suppressClicksTimer?.remove();
-    this.resetButtonContainer?.destroy();
+    if (MobilePinchZoom.activeInstance === this) {
+      MobilePinchZoom.activeInstance = undefined;
+    }
   }
 
   // ---- gesture handling ---------------------------------------------
@@ -309,7 +327,6 @@ export default class MobilePinchZoom {
       if (this.suppressClicks) {
         this.stopSuppressingClicksAfterCooldown();
       }
-      this.updateResetButtonVisibility();
     }
   }
 
@@ -359,7 +376,6 @@ export default class MobilePinchZoom {
 
     this.pinchPrevDistance = newDistance;
     this.pinchPrevMidpoint = newMidpoint;
-    this.updateResetButtonVisibility();
   }
 
   private panCameraBy(dxScreen: number, dyScreen: number): void {
@@ -385,7 +401,7 @@ export default class MobilePinchZoom {
     });
   }
 
-  /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see disable()). */
+  /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see disable()) or fully reset (see reset()). */
   private abortGesture(): void {
     this.isPinching = false;
     this.isDragging = false;
@@ -395,6 +411,14 @@ export default class MobilePinchZoom {
       this.suppressClicks = false;
       this.scene.input.enabled = true;
     }
+  }
+
+  /** Camera + gesture-state half of reset() — shared with the RESIZE handler, which must NOT also trigger another scale.refresh() (see handleResize's own comment). */
+  private resetCameraAndGestureState(): void {
+    this.abortGesture();
+    const camera = this.scene.cameras.main;
+    camera.setZoom(MIN_ZOOM);
+    camera.centerOn(this.scene.scale.width / 2, this.scene.scale.height / 2);
   }
 
   // ---- temporary debug logging ----------------------------------------
@@ -417,72 +441,5 @@ export default class MobilePinchZoom {
   private logDebugGameObjectDown(_pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject): void {
     // eslint-disable-next-line no-console
     console.log('[MobilePinchZoom] hit object:', gameObject.name || gameObject.constructor.name);
-  }
-
-  // ---- reset-to-100% button ------------------------------------------
-
-  private createResetButton(): void {
-    this.generateResetButtonTexture();
-
-    const container = this.scene.add
-      .container(0, 0)
-      .setDepth(RESET_BUTTON_DEPTH)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    const bg = this.scene.add.image(0, 0, RESET_BUTTON_TEXTURE_KEY).setOrigin(0.5).setScrollFactor(0);
-    const text = this.scene.add
-      .text(0, 0, '100%', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#f2e9d8' })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-    container.add([bg, text]);
-
-    bg.setInteractive({ useHandCursor: true });
-    bg.on(Phaser.Input.Events.POINTER_DOWN, () => this.reset());
-
-    this.resetButtonContainer = container;
-    this.positionResetButton();
-  }
-
-  private positionResetButton(): void {
-    if (!this.resetButtonContainer) {
-      return;
-    }
-    const width = this.scene.scale.width;
-    const height = this.scene.scale.height;
-    this.resetButtonContainer.setPosition(
-      width - RESET_BUTTON_MARGIN_PX - RESET_BUTTON_SIZE_PX / 2,
-      height - RESET_BUTTON_MARGIN_PX - RESET_BUTTON_SIZE_PX / 2,
-    );
-  }
-
-  private updateResetButtonVisibility(): void {
-    const visible = this.scene.cameras.main.zoom > RESET_BUTTON_VISIBLE_ZOOM_THRESHOLD;
-    this.resetButtonContainer?.setVisible(visible);
-  }
-
-  private generateResetButtonTexture(): void {
-    if (this.scene.textures.exists(RESET_BUTTON_TEXTURE_KEY)) {
-      return;
-    }
-    const size = RESET_BUTTON_SIZE_PX;
-    const canvas = this.scene.textures.createCanvas(RESET_BUTTON_TEXTURE_KEY, size, size);
-    if (!canvas) {
-      return;
-    }
-    const ctx = canvas.getContext();
-    const cx = size / 2;
-    const cy = size / 2;
-    const r = size / 2 - 2;
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(20,16,12,0.82)';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(214,178,112,0.85)';
-    ctx.stroke();
-
-    canvas.refresh();
   }
 }
