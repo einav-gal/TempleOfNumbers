@@ -516,3 +516,65 @@ once the room completes, so it's obvious the doorway must be clicked.
   `false`; finally, restarted `LibraRoomScene` fresh (simulating
   re-entry) with the completed registry flag already set, and confirmed
   the exit was immediately active and pulsing with no animation delay.
+
+---
+
+## Sprint — Reset-Zoom Button Hardening + Click-Mapping Audit
+
+### Status
+
+Completed
+
+### Goal
+
+Harden the existing global "reset zoom" HTML button against a detailed
+explicit checklist (fixed HTML element, survives zoom/pan/resize, shows
+only on a real zoom/pan and hides again at rest, a full and correct
+camera/gesture-state reset on click, no coupling to a specific scene, no
+duplicate listeners across scene transitions), and re-audit click/hit-test
+mapping after zoom and pan. No new zoom system; no puzzle-design changes.
+
+### Completed
+
+- **`src/game/MobilePinchZoom.ts`:**
+  - `abortGesture()` now also explicitly zeroes `pinchPrevDistance` and
+    `pinchPrevMidpoint` (previously left stale between gestures — harmless
+    since `startPinch()` always recomputes them, but not explicit).
+  - `reset()` now runs `resetCameraAndGestureState()` →
+    `scene.scale.refresh()` → `resetCameraAndGestureState()` again, so the
+    camera is guaranteed to be re-applied *after* the refresh rather than
+    only before it (defensive — this project's FIT/ENVELOP scale modes
+    never actually change `scene.scale.width/height` on a refresh, only
+    the canvas's CSS display size, so today the extra call is a no-op,
+    but it removes the reliance on that never changing).
+  - `isZoomedOrPanned()` (fixed in the prior session, confirmed correct
+    here) checks scroll drift from a cached default in addition to zoom,
+    so a two-finger pan-only gesture also brings up the reset button.
+- **`src/main.ts`:** the reset button's click handler now calls
+  `event.preventDefault()`/`stopPropagation()` defensively before calling
+  `MobilePinchZoom.getActive()?.reset()`.
+- **Audit (no code change needed):** grepped the whole `src/` tree for
+  `pointer.x`/`pointer.y` and for `clientX`/`clientY`/
+  `getBoundingClientRect` — confirmed the only remaining hand-rolled
+  screen-coordinate hit-testing was `EquivalencePuzzle.ts` (already fixed
+  in a prior session to use `pointer.worldX`/`worldY`); every other
+  interactive object uses Phaser's own camera-aware `setInteractive()`
+  local-space hit-area system. Also confirmed all four scenes that create
+  a `MobilePinchZoom` instance (`CentralHallScene`, `PinkRoomScene`,
+  `LibraRoomScene`, `Room3Scene`) call `pinchZoom?.destroy()` in their
+  `SHUTDOWN` handler, and that `MobilePinchZoom.getActive()`'s static
+  registry (not a direct scene/camera reference held by `main.ts`) is
+  already the "safe reference, no brittle coupling" pattern requested.
+
+### Out of Scope (respected)
+
+- No new pinch/zoom/pan system — the existing `MobilePinchZoom.ts` was
+  hardened in place.
+- No puzzle logic, object position, crystal-collection, or room-transition
+  code touched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- See `docs/PROJECT_STATE.md`'s matching sprint entry for the full
+  requirement-by-requirement checklist this was verified against.

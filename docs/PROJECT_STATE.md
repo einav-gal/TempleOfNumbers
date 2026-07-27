@@ -2236,6 +2236,79 @@ the doorway's zone stops the pulse; and a fresh scene start with the
 completed registry flag already set shows the exit already active and
 pulsing on load.
 
+### Reset-zoom button hardening + hit-testing audit (completed)
+
+Prior sessions had already built Room 3, the mobile scale-mode/fullscreen/
+pinch-to-zoom system, and a global "reset zoom" HTML button (none of which
+had a chronological entry logged here yet — see the "Room 3" and "Mobile
+responsiveness & pinch-to-zoom" subsections in the Current State Summary
+below for what already existed). This task's own request was narrower:
+harden that existing reset button against the full explicit checklist
+below, and re-audit click-mapping — no new zoom system, no puzzle-design
+changes.
+
+Checked against each requirement:
+
+- **Fixed HTML button, not a Phaser object, `position: fixed`, survives
+  zoom/pan/resize, mobile-sized touch target, high `z-index`, hidden by
+  default, shown only on a real zoom/pan, hidden again once the camera
+  returns to its default** — all already true (`#zoom-reset-toggle` in
+  `index.html`; visibility poll in `main.ts`). One real gap found and
+  fixed last session: the poll only checked `camera.zoom`, so a
+  two-finger **pan-only** gesture (translating without spreading, which
+  never changes zoom) could leave the camera off-center with no way to
+  bring the button up — `MobilePinchZoom.isZoomedOrPanned()` now also
+  compares `scrollX`/`scrollY` against a cached default (with a small
+  pixel tolerance, `PAN_ACTIVE_THRESHOLD_PX`), not just zoom.
+- **Reset must**: zero `camera.zoom` to `1`; restore `scrollX`/`scrollY`
+  to the room's real initial framing (not an assumed `(0,0)` literal —
+  `resetCameraAndGestureState()` derives it from `scene.scale.width/
+  height` via `camera.centerOn()`, confirmed to match every current
+  room's actual resting scroll since none use a custom camera viewport/
+  bounds); clear every pinch/pan state variable; clear tracked pointer
+  identifiers; call `game.scale.refresh()`; then re-apply the camera
+  reset once more so the position can't drift on the next frame; and the
+  button's click must not reach the canvas. `MobilePinchZoom.ts`:
+  `abortGesture()` now also explicitly zeroes `pinchPrevDistance`/
+  `pinchPrevMidpoint` (previously left stale until the next `startPinch()`
+  overwrote them — harmless in practice, but not explicit); `reset()` now
+  calls `resetCameraAndGestureState()` → `scale.refresh()` →
+  `resetCameraAndGestureState()` again (the extra call is a no-op today,
+  since this project's FIT/ENVELOP modes never change `scale.width/
+  height` on refresh — only the canvas's CSS display size — but it's what
+  makes the "no drift next frame" guarantee hold regardless). `main.ts`'s
+  button click handler now calls `event.preventDefault()`/
+  `stopPropagation()` defensively (the DOM structure already prevented
+  the click from reaching the canvas, since the button is a sibling
+  element, not an overlay the click could bubble through — this is
+  belt-and-braces, not a fix for an observed bug). This project has no
+  pointer-capture calls anywhere, so nothing needed releasing there.
+- **Safe reference to the active scene/camera without brittle coupling**:
+  already satisfied by the existing `MobilePinchZoom.getActive()` static
+  registry (only one scene ever runs at a time) — `main.ts` never holds a
+  scene/camera reference directly. No change needed.
+- **No duplicate listeners across scene transitions/shutdown**: confirmed
+  `CentralHallScene`/`PinkRoomScene`/`LibraRoomScene`/`Room3Scene` — the
+  only four scenes that create a `MobilePinchZoom` instance — all call
+  `pinchZoom?.destroy()` in their `SHUTDOWN` handler. No change needed.
+- **Click-mapping / hit-testing audit**: re-confirmed by grepping the
+  whole `src/` tree for `pointer.x`/`pointer.y` and for
+  `clientX`/`clientY`/`getBoundingClientRect`. Only `EquivalencePuzzle.ts`
+  (fixed in a prior session — `pointer.worldX`/`worldY` instead of
+  `pointer.x`/`y` in its hand-rolled ring-selection math) and
+  `MobilePinchZoom.ts` itself (which legitimately needs `clientX`/`clientY`
+  to measure the pinch gesture in screen space, never to hit-test a game
+  object) reference either. No other file does manual coordinate-based
+  hit testing; every other interactive object uses Phaser's own
+  `setInteractive()` local-space hit-area system, which is already
+  camera-zoom/pan-safe. No further code change was needed here.
+
+Files changed this task: `MobilePinchZoom.ts` (`abortGesture()`,
+`reset()`), `main.ts` (button click handler). No puzzle logic, object
+position, or room-transition code touched.
+
+`npm run build` (`tsc && vite build`) passes with no errors.
+
 ## Current State Summary (verified against source)
 
 The entries above are the chronological sprint log. This section is a
@@ -2301,8 +2374,114 @@ it (don't just append below it) whenever one of these systems changes.
   clicks it; re-entering the room after completion shows the doorway
   already unlocked and glowing, no animation replay. Return transition:
   zoom + fade → `scene.start('CentralHallScene')`.
-- The **green** `CrystalHolder` slot is reserved but not yet wired to any
-  room/puzzle — no third room exists yet.
+- The **green** `CrystalHolder` slot was reserved here and is now wired to
+  Room 3's puzzle (see below) rather than the Libra Room.
+
+### Room 3 (`Room3Scene.ts`)
+
+- Reached via the Central Hall (registered in `main.ts`, alongside the
+  other rooms). Uses the real `room3-background.png` attic art with the
+  same cover-scale anchor convention as every other scene.
+- **Puzzle (`MapFractionPuzzle.ts`):** a bank of 10+ fraction-equivalence
+  questions over an 8-cell map (some testing the raw lit-parts fraction,
+  some testing a reduced equivalent), shuffled with no consecutive
+  repeats, random lit-cell subsets, shuffled on-screen answer-card order,
+  and vertically-rendered fractions (numerator/line/denominator, never a
+  single-line "6/8" string). Same 3-correct-answers/code-digit-reveal
+  pattern as the Pink Room/Libra Room puzzles; on completion flies a
+  reward crystal into the `CrystalHolder`'s **green** slot (the
+  previously-reserved slot), completing the crystal-collection system.
+- **Room's own crystal:** a large decorative `green-crystal.png` to the
+  right of the map (not the `CrystalHolder` UI), on a procedural stone
+  pedestal, with idle hover/scale-breathe animation stopped the instant
+  the reward sequence starts so the reward shard's flight has a fixed
+  target.
+- **Exit:** the background's own painted stairwell, made interactive via
+  `Doorway.ts` (same technique as the other rooms), with a text hint
+  above it ("חזרה לאולם הראשי"). Return transition matches the other
+  rooms' short zoom/fade pattern.
+
+### Mobile responsiveness & pinch-to-zoom (global system)
+
+- **Scale mode (`main.ts`):** `Phaser.Scale.FIT` by default; switches to
+  `Phaser.Scale.ENVELOP` on short phone-landscape viewports
+  (`matchMedia('(orientation: landscape) and (max-height: 600px)')`),
+  re-evaluated on resize/orientation change. Requires setting both
+  `game.scale.scaleMode` **and** `game.scale.displaySize.setAspectMode()`
+  — Phaser only copies the former into the latter once, at boot, so
+  switching modes at runtime silently no-ops without the second call.
+  Game config sets `input.activePointers: 3` (Phaser defaults to `1`,
+  which can't track a two-finger gesture at all).
+- **Fullscreen (`src/fullscreen.ts`):** feature-detected, try/catch-safe
+  helpers; a small always-present HTML `#fullscreen-toggle` button
+  (top-right) triggers it — never auto-requested on a non-gesture code
+  path.
+- **Pinch-to-zoom/pan (`src/game/MobilePinchZoom.ts`):** one shared class,
+  one instance created per interactive scene (`CentralHallScene`,
+  `PinkRoomScene`, `LibraRoomScene`, `Room3Scene` — deliberately **not**
+  `LibraStaircaseScene`, a non-interactive scripted camera fly-through).
+  All zoom/pan is `camera.setZoom()` + direct `scrollX`/`scrollY`
+  assignment — never CSS transform, never a browser-level zoom, never a
+  second camera or a full-screen interactive Phaser object. Gesture
+  tracking uses raw DOM `touchstart`/`touchmove`/`touchend` listeners on
+  the canvas (not `scene.input.on(...)`), because Phaser's `InputPlugin`
+  gates its *entire* pipeline — including a scene's own
+  `scene.input.on(...)` listeners — on `scene.input.enabled`, which this
+  class also uses to suppress clicks during a gesture; building gesture
+  tracking on the same flag it disables would deadlock it.
+  - **Only a genuine two-finger touch is ever a camera gesture** — pinch
+    (distance change) and pan (midpoint translation) together, in one
+    `updatePinch()` pass. A single finger is never tracked/suppressed by
+    this class at all; it passes straight through to Phaser's own
+    pointer/drag system, so an object can be dragged (e.g. the Pink
+    Room's rings) with one finger at any zoom level. An earlier version
+    also panned the camera on a single-finger drag once zoomed in, which
+    made that gesture indistinguishable from dragging an object
+    underneath it — removed for exactly that reason.
+  - Click suppression (`suppressClicks`, the only flag that ever touches
+    `scene.input.enabled`) is cleared from exactly one place, gated on
+    "zero touches remain" — an earlier version cleared it on a 2→1
+    finger transition instead, which could leave every click in a scene
+    permanently dead.
+  - **Global "reset zoom" HTML button** (`#zoom-reset-toggle` in
+    `index.html`, top-left): a plain fixed-position DOM element, never a
+    Phaser object, so it always stays in place through any zoom/pan/
+    resize. Hidden by default; a poll in `main.ts` shows it via
+    `MobilePinchZoom.getActive().isZoomedOrPanned()` — true if
+    `camera.zoom` exceeds a small threshold **or** `scrollX`/`scrollY`
+    has drifted from the scene's own cached default centered position
+    (a two-finger pan-only gesture never changes zoom, so checking zoom
+    alone would miss it). Its click calls `reset()`: aborts any
+    in-flight gesture, zeroes every tracked pointer/gesture variable
+    (touch map, cached pinch distance, cached pinch/pan midpoint),
+    snaps the camera back to zoom `1` centered on the scene's own real
+    resting frame (not a hardcoded `(0,0)` — derived from
+    `scene.scale.width/height`, which happens to equal `(0,0)` scroll
+    for every current room since none use a custom camera viewport/
+    bounds), calls `scale.refresh()`, then re-applies the camera reset
+    once more so the position can't visibly drift on the very next
+    frame. The button's own click handler stops propagation/default
+    defensively. `getActive()` is a static registry (only one scene
+    ever runs at a time), so `main.ts` never holds a direct scene/camera
+    reference.
+  - Every scene that creates an instance also calls `pinchZoom?.destroy()`
+    in its `SHUTDOWN` handler (removes the DOM listeners, the `RESIZE`
+    listener, and clears the static registry if it was the active
+    instance) — confirmed no duplicate listeners accumulate across
+    repeated scene transitions.
+- **Hit-testing stays camera-safe:** every interactive object in the
+  project uses Phaser's own local-space `setInteractive()`/hit-area
+  system (already automatically camera-aware) — the one exception found
+  was `EquivalencePuzzle.ts`'s hand-rolled ring-selection math (comparing
+  raw `pointer.x`/`pointer.y`, screen-space, against a world-space
+  center), fixed by switching to `pointer.worldX`/`pointer.worldY`. No
+  other file does manual `clientX`/`clientY`- or `pointer.x`/`y`-based
+  hit testing (`MobilePinchZoom.ts` uses `clientX`/`clientY` only to
+  measure the pinch gesture itself, never to hit-test a game object).
+- A temporary `DEBUG_LOG_CLICKS` flag in `MobilePinchZoom.ts` logs
+  pointer/world/camera state and the hit object's name on every
+  pointerdown — left on pending on-device verification, to be flipped
+  off afterward.
 
 ### Room-entry and return flows (shared conventions)
 
@@ -2341,9 +2520,11 @@ it (don't just append below it) whenever one of these systems changes.
 
 - None currently open. The scene-instance-reuse class of bugs (doorways/
   entrances becoming permanently unclickable after one use) was found and
-  fixed — see above.
-- The green `CrystalHolder` slot has no puzzle wired to it yet (expected —
-  no third room exists).
+  fixed — see above. The Pink Room ring-selection camera-coordinate bug
+  and the pinch-zoom click-deadlock bug (see "Mobile responsiveness &
+  pinch-to-zoom" above) were also found and fixed.
+- The green `CrystalHolder` slot is now wired to Room 3's puzzle (see
+  above) — all three slots are in use.
 
 ### GitHub repository and deployment
 

@@ -208,16 +208,23 @@ export default class MobilePinchZoom {
 
   /**
    * Full reset, safe to call from anywhere (including the global HTML
-   * button, entirely outside Phaser): stops any active pinch/pan,
-   * zeroes isPinching/suppressClicks and every tracked
-   * pointer, snaps the camera back to zoom=1 centered on the scene's
-   * original framing, and finally asks the Scale Manager to refresh —
-   * so every clickable area is guaranteed to line back up exactly where
-   * it's drawn.
+   * button, entirely outside Phaser): stops any active pinch/pan, zeroes
+   * isPinching/suppressClicks and every tracked pointer/gesture variable,
+   * snaps the camera back to zoom=1 centered on the scene's original
+   * framing, asks the Scale Manager to refresh, and THEN re-applies the
+   * camera reset one more time against whatever the refresh settled on —
+   * so the reset can never visibly "jump again" one frame later. In this
+   * project's FIT/ENVELOP scale modes `scene.scale.width/height` (the
+   * fixed logical game size) never actually changes from a refresh — only
+   * the canvas's CSS display size does — so the two calls resolve
+   * identically today, but the second one is what makes that guarantee
+   * hold even if that ever stopped being true, rather than relying on it
+   * by coincidence.
    */
   reset(): void {
     this.resetCameraAndGestureState();
     this.scene.scale.refresh();
+    this.resetCameraAndGestureState();
   }
 
   destroy(): void {
@@ -401,7 +408,15 @@ export default class MobilePinchZoom {
   /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see disable()) or fully reset (see reset()). */
   private abortGesture(): void {
     this.isPinching = false;
+    // Every pointer/gesture-tracking variable this class owns — tracked
+    // touch identifiers, the previous pinch distance, and the previous
+    // pinch/pan midpoint — is zeroed here, not just isPinching, so a
+    // reset leaves no stale gesture state behind for the next touch to
+    // (harmlessly, since startPinch() always recomputes them, but
+    // explicitly rather than by coincidence) pick up.
     this.touches.clear();
+    this.pinchPrevDistance = 0;
+    this.pinchPrevMidpoint = { x: 0, y: 0 };
     this.suppressClicksTimer?.remove();
     if (this.suppressClicks) {
       this.suppressClicks = false;

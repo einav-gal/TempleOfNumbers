@@ -119,7 +119,13 @@ function setUpZoomResetButton(): void {
     return;
   }
 
-  button.addEventListener('click', () => {
+  button.addEventListener('click', (event) => {
+    // This is a real DOM sibling of the canvas (not an overlay Phaser
+    // object), so a click here never reaches the canvas on its own — but
+    // stop it explicitly anyway, defensively, rather than relying on that
+    // DOM structure never changing.
+    event.preventDefault();
+    event.stopPropagation();
     MobilePinchZoom.getActive()?.reset();
     button.classList.remove('visible');
   });
