@@ -14,8 +14,10 @@ import IntroOverlay from '../game/IntroOverlay';
 import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
 import MobilePinchZoom from '../game/MobilePinchZoom';
-import { hasSeenGameIntro, markGameIntroSeen } from '../game/GameState';
+import CrystalPlacementMode from '../game/CrystalPlacementMode';
+import { hasSeenGameIntro, markGameIntroSeen, areAllCrystalsCollected, areAllCrystalsPlaced } from '../game/GameState';
 import { FONT_FAMILY } from '../game/textStyle';
+import { createRtlText } from '../game/rtlText';
 import handleUrl from '../../assets/images/central-hall/handle/handle.png';
 // Photoshop-matched statue variant, hand-graded to match the background's
 // lighting/contrast/warmth. Replaces the earlier procedurally-blended
@@ -124,6 +126,11 @@ const STAIR_CROSSFADE_MS = 120;
 const STAIR_CROSSFADE_PEAK_ALPHA = 0.55;
 
 const POPUP_TEXT = 'The Heart of the Temple is dormant.';
+// Shown automatically once the crystal shatters (see
+// heart.onMechanismShattered wiring in create()) — the game's actual
+// "you won" message. Nothing further (credits, a real ending scene,
+// reset) is built beyond this message — a separate, future task.
+const FINAL_STAGE_POPUP_TEXT = 'הצלחתם לצאת מהמקדש!';
 
 // The project has no shared game-state system yet; scene.start() fully
 // recreates a Scene from scratch, so anything the player already did
@@ -172,6 +179,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private crystalHolder?: CrystalHolder;
   private wallWheel?: WallWheel;
   private pinchZoom?: MobilePinchZoom;
+  private crystalPlacementMode?: CrystalPlacementMode;
   // Independent per-destination transition guards — never one shared
   // lock. Each is reset to false at the top of create() (Phaser reuses
   // this Scene instance across stop()/start(), so without the reset a
@@ -248,6 +256,20 @@ export default class CentralHallScene extends Phaser.Scene {
     this.crystalHolder = new CrystalHolder(this);
     this.crystalHolder.create(OVERLAY_DEPTH - 10);
 
+    // Stage 1 of "return the crystals": only exists at all once every
+    // crystal has actually been collected (same shared registry state
+    // CrystalHolder already reads, never a parallel tracker) — otherwise
+    // the hall behaves exactly as before, with nothing extra created.
+    if (areAllCrystalsCollected(this.registry)) {
+      this.crystalPlacementMode = new CrystalPlacementMode(this);
+      this.crystalPlacementMode.create();
+      this.crystalPlacementMode.onCrystalPlaced = (crystalId) => this.heart?.playActivationNudge(crystalId);
+      // Avoid showing the same collected crystals at full strength twice —
+      // the pouch was never actually clickable, so this only dims its
+      // look; CrystalPlacementMode is now "the" active crystal display.
+      this.crystalHolder?.setDimmed(true);
+    }
+
     // Kept off while the intro overlay is showing (see below) — that
     // overlay isn't camera-scroll-independent, so pinching underneath it
     // would visually misalign it; every other interaction here already
@@ -257,7 +279,21 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart = new HeartOfTheTemple(this);
     this.heart.create();
+    // "Restore, don't replay" — same pattern as Statue/Entrance/FloorEntrance:
+    // if every crystal was already placed on a previous visit, jump
+    // straight to the fully-open end state (before the first layout()
+    // call below) instead of showing the caged mechanism and re-animating.
+    if (areAllCrystalsPlaced(this.registry)) {
+      this.heart.restoreOpen();
+    }
+    // Only ever fires while the crystal is still caged and visible — once
+    // it shatters it's disabled and hidden, so there's nothing left for
+    // this to be called for.
     this.heart.onCrystalClick = () => this.openPopup();
+    // The actual "you won" message — fires once, automatically, a beat
+    // after the crystal shatters (never on the restoreOpen() "already
+    // resolved" path above, so a returning visit never replays it).
+    this.heart.onMechanismShattered = () => this.openFinalStagePopup();
 
     this.atmosphere = new Atmosphere(this);
     this.atmosphere.create();
@@ -373,6 +409,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.destroy();
       this.wallWheel?.destroy();
       this.pinchZoom?.destroy();
+      this.crystalPlacementMode?.destroy();
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
@@ -471,6 +508,8 @@ export default class CentralHallScene extends Phaser.Scene {
       this.backgroundScale,
     );
 
+    this.crystalPlacementMode?.layout(toScreenX, toScreenY, this.backgroundScale);
+
     this.intro?.layout(width, height);
 
     if (this.popup && this.popupOverlay) {
@@ -541,6 +580,57 @@ export default class CentralHallScene extends Phaser.Scene {
     // Background interaction locked while the popup is open — every
     // object locked here is explicitly re-enabled by
     // closeLeftExerciseAndRestoreInput() below, never left to chance.
+    this.leftDoorway?.setActive(false);
+    this.pot?.setActive(false);
+  }
+
+  /**
+   * Same popup shell as openPopup() (dim overlay, stone panel, suppress/
+   * lock, fade-in), but with its own Hebrew RTL "you won" message — fires
+   * automatically from heart.onMechanismShattered (see create()), never
+   * from a click. Kept as its own method rather than parameterizing
+   * openPopup() itself, so the existing (English, plain Phaser Text,
+   * untouched) dormant-crystal popup can't be affected by this addition.
+   */
+  private openFinalStagePopup(): void {
+    if (this.popup || this.time.now - this.lastPopupToggleAt < 300) {
+      return;
+    }
+    this.lastPopupToggleAt = this.time.now;
+
+    const width = this.scale.width;
+    const height = this.scale.height;
+
+    this.popup = this.add.container(width / 2, height / 2).setDepth(100);
+
+    this.popupOverlay = this.add
+      .rectangle(-width / 2, -height / 2, width, height, 0x000000, 0.5)
+      .setOrigin(0, 0);
+    this.popup.add(this.popupOverlay);
+
+    this.heart?.setSuppressed(true);
+
+    const panelWidth = Math.min(width * 0.8, 620);
+    const panelHeight = 190;
+    this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
+
+    const message = createRtlText(this, 0, -12, FINAL_STAGE_POPUP_TEXT, {
+      fontSize: `${Math.max(18, Math.min(26, width * 0.02))}px`,
+      color: '#d9cfae',
+      align: 'center',
+      wordWrap: { width: panelWidth - 80 },
+    }).setOrigin(0.5);
+    this.popup.add(message);
+
+    const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
+      fontSize: '13px',
+      color: '#8a8068',
+    }).setOrigin(0.5);
+    this.popup.add(hint);
+
+    this.popup.setAlpha(0);
+    this.tweens.add({ targets: this.popup, alpha: 1, duration: 200 });
+
     this.leftDoorway?.setActive(false);
     this.pot?.setActive(false);
   }

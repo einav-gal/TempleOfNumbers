@@ -8,6 +8,13 @@ import LibraStaircaseScene from './scenes/LibraStaircaseScene';
 import Room3Scene from './scenes/Room3Scene';
 import { isFullscreenSupported, isGameFullscreen, toggleGameFullscreen } from './fullscreen';
 import MobilePinchZoom from './game/MobilePinchZoom';
+import {
+  isDebugFinalStageRequested,
+  isDebugResetRequested,
+  applyDebugFinalStage,
+  clearDebugState,
+  isDebugModeActive,
+} from './game/GameState';
 
 const ZOOM_RESET_POLL_MS = 200;
 
@@ -69,6 +76,21 @@ async function boot(): Promise<void> {
 ],
   });
 
+  // Seeded synchronously, right after construction — Phaser's own scene
+  // boot is asynchronous (runs on the next tick of its internal loop, not
+  // inside this constructor call), so this always lands before
+  // CentralHallScene.create() (the first scene in the array above, and
+  // already the game's normal starting point either way) ever runs.
+  // Reads/writes go through the exact same registry setters a real
+  // playthrough uses — never a parallel state — so a normal visit with no
+  // `?debug=...` query param is completely unaffected.
+  if (isDebugResetRequested()) {
+    clearDebugState(game.registry);
+  } else if (isDebugFinalStageRequested()) {
+    applyDebugFinalStage(game.registry);
+  }
+  setUpDebugStageTag(game);
+
   // Re-evaluate FIT vs ENVELOP whenever the device crosses the
   // phone-landscape threshold (a real rotation, or a desktop window
   // resize) — always by reconfiguring this one existing Scale Manager,
@@ -105,6 +127,17 @@ async function boot(): Promise<void> {
 
   setUpFullscreenToggleButton(game);
   setUpZoomResetButton();
+}
+
+// A small, unobtrusive on-screen tag — visible ONLY when ?debug=final
+// actually applied this session (never in a normal playthrough, and never
+// left showing after a plain page load with no debug query param at all).
+function setUpDebugStageTag(game: Phaser.Game): void {
+  const tag = document.getElementById('debug-stage-tag');
+  if (!tag) {
+    return;
+  }
+  tag.classList.toggle('visible', isDebugModeActive(game.registry));
 }
 
 // A small, always-present HTML button (never a Phaser object — see

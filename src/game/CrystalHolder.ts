@@ -122,6 +122,18 @@ export default class CrystalHolder {
     this.setSlotFilled(id, true);
   }
 
+  /**
+   * Dims the whole pouch to a faint, non-interactive-looking state — used
+   * once CrystalPlacementMode takes over as the "current" crystal display
+   * (avoiding two full-strength displays of the same collected crystals at
+   * once). The pouch was never actually clickable to begin with, so this
+   * only changes how it looks, not any interactivity. Safe to call
+   * repeatedly; `false` restores full strength.
+   */
+  setDimmed(dimmed: boolean): void {
+    this.container?.setAlpha(dimmed ? 0.35 : 1);
+  }
+
   /** The slot's screen-space center — for a reward animation to fly its collected crystal into. */
   getSlotScreenPosition(id: CrystalId): { x: number; y: number } {
     const slot = this.slots[id];
