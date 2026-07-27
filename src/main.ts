@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import CentralHallScene from './scenes/CentralHallScene';
-import PuzzlePlaceholderScene from './scenes/PuzzlePlaceholderScene';
 import HiddenPassageScene from './scenes/HiddenPassageScene';
 import PinkRoomScene from './scenes/PinkRoomScene';
 import LibraRoomScene from './scenes/LibraRoomScene';
@@ -67,7 +66,6 @@ async function boot(): Promise<void> {
     },
     scene: [
   CentralHallScene,
-  PuzzlePlaceholderScene,
   HiddenPassageScene,
   PinkRoomScene,
   LibraStaircaseScene,

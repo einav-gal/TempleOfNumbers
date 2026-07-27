@@ -4,7 +4,6 @@ import potUrl from '../../assets/images/central-hall/Pot/pot.png';
 import HeartOfTheTemple from '../game/HeartOfTheTemple';
 import Atmosphere from '../game/Atmosphere';
 import AmbienceAudio from '../game/AmbienceAudio';
-import Doorway from '../game/Doorway';
 import Pot from '../game/Pot';
 import Handle from '../game/Handle';
 import Statue from '../game/Statue';
@@ -29,7 +28,6 @@ const POT_KEY = 'central-hall-pot';
 const HANDLE_KEY = 'central-hall-handle';
 const STATUE_KEY = 'central-hall-statue';
 const FADE_IN_DURATION_MS = 1200;
-const DOORWAY_FADE_OUT_MS = 400;
 const POT_DEPTH = 4;
 const HANDLE_DEPTH = 3;
 const STATUE_DEPTH = 2;
@@ -41,12 +39,6 @@ const WALL_WHEEL_DEPTH = 2;
 // at any window size.
 const PEDESTAL_CENTER_X = 762;
 const PEDESTAL_CENTER_Y = 775;
-
-// Left doorway opening, measured in background-image pixels. Only the left
-// doorway is interactive this sprint; the right doorway is untouched.
-const LEFT_DOORWAY_CENTER_X = 195;
-const LEFT_DOORWAY_CENTER_Y = 545;
-const LEFT_DOORWAY_SIZE = { widthBg: 190, heightBg: 330 };
 
 // Interactive pot: floor-contact point and target display height (full
 // source image, leaves included), measured in background-image pixels.
@@ -169,7 +161,6 @@ export default class CentralHallScene extends Phaser.Scene {
   private heart?: HeartOfTheTemple;
   private atmosphere?: Atmosphere;
   private ambience = new AmbienceAudio();
-  private leftDoorway?: Doorway;
   private pot?: Pot;
   private handle?: Handle;
   private statue?: Statue;
@@ -188,7 +179,6 @@ export default class CentralHallScene extends Phaser.Scene {
   // since they used to share a single `leavingHall` flag).
   private isEnteringPinkRoom = false;
   private isEnteringLibraRoom = false;
-  private isEnteringPuzzlePlaceholder = false;
   private isEnteringRoom3 = false;
   private backgroundScale = 1;
   private popup?: Phaser.GameObjects.Container;
@@ -228,7 +218,6 @@ export default class CentralHallScene extends Phaser.Scene {
     this.input.enabled = true;
     this.isEnteringPinkRoom = false;
     this.isEnteringLibraRoom = false;
-    this.isEnteringPuzzlePlaceholder = false;
     this.isEnteringRoom3 = false;
 
     this.background = this.add.image(0, 0, BACKGROUND_KEY);
@@ -298,10 +287,6 @@ export default class CentralHallScene extends Phaser.Scene {
     this.atmosphere = new Atmosphere(this);
     this.atmosphere.create();
 
-    this.leftDoorway = new Doorway(this, LEFT_DOORWAY_SIZE);
-    this.leftDoorway.create();
-    this.leftDoorway.onActivate = () => this.enterLeftDoorway();
-
     // Created before the statue so it renders behind it at every step
     // (ENTRANCE_DEPTH < STATUE_DEPTH); starts fully transparent and
     // non-interactive until the statue has fully opened.
@@ -358,12 +343,10 @@ export default class CentralHallScene extends Phaser.Scene {
       // .layout() on a dead GameObject and crash.
       this.intro = undefined;
       this.heart.setSuppressed(false);
-      this.leftDoorway.setActive(true);
       this.pot.setActive(true);
     } else {
       // Hall interactions stay disabled until the intro overlay is dismissed.
       this.heart.setSuppressed(true);
-      this.leftDoorway.setActive(false);
       this.pot.setActive(false);
       this.pinchZoom?.disable();
 
@@ -372,7 +355,6 @@ export default class CentralHallScene extends Phaser.Scene {
       this.intro.onDismissed = () => {
         markGameIntroSeen(this.registry);
         this.heart?.setSuppressed(false);
-        this.leftDoorway?.setActive(true);
         this.pot?.setActive(true);
         this.pinchZoom?.enable();
       };
@@ -428,7 +410,6 @@ export default class CentralHallScene extends Phaser.Scene {
     this.overlay?.setAlpha(0);
 
     const introSeen = hasSeenGameIntro(this.registry);
-    this.leftDoorway?.setActive(introSeen);
     this.pot?.setActive(introSeen);
 
     if (this.registry.get(STATE_KEY_LEFT_STATUE_OPEN)) {
@@ -485,12 +466,6 @@ export default class CentralHallScene extends Phaser.Scene {
       y: toScreenY,
       scale: this.backgroundScale,
     });
-
-    this.leftDoorway?.layout(
-      toScreenX(LEFT_DOORWAY_CENTER_X),
-      toScreenY(LEFT_DOORWAY_CENTER_Y),
-      this.backgroundScale,
-    );
 
     this.statue?.layout(toScreenX(STATUE_CENTER_X), toScreenY(STATUE_BASE_Y), this.backgroundScale);
 
@@ -579,8 +554,7 @@ export default class CentralHallScene extends Phaser.Scene {
 
     // Background interaction locked while the popup is open — every
     // object locked here is explicitly re-enabled by
-    // closeLeftExerciseAndRestoreInput() below, never left to chance.
-    this.leftDoorway?.setActive(false);
+    // closePopupAndRestoreInput() below, never left to chance.
     this.pot?.setActive(false);
   }
 
@@ -631,7 +605,6 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.setAlpha(0);
     this.tweens.add({ targets: this.popup, alpha: 1, duration: 200 });
 
-    this.leftDoorway?.setActive(false);
     this.pot?.setActive(false);
   }
 
@@ -821,24 +794,11 @@ export default class CentralHallScene extends Phaser.Scene {
     });
   }
 
-  private enterLeftDoorway(): void {
-    if (this.isTransitioningAway()) {
-      return;
-    }
-    this.isEnteringPuzzlePlaceholder = true;
-    this.leftDoorway?.setActive(false);
-
-    this.cameras.main.fadeOut(DOORWAY_FADE_OUT_MS, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start('PuzzlePlaceholderScene');
-    });
-  }
-
   // Independent per-destination guards, checked together only to stop
   // one exit's transition overlapping another's (never used as a single
   // persistent lock — each flag is reset in create(), see there).
   private isTransitioningAway(): boolean {
-    return this.isEnteringPinkRoom || this.isEnteringLibraRoom || this.isEnteringPuzzlePlaceholder || this.isEnteringRoom3;
+    return this.isEnteringPinkRoom || this.isEnteringLibraRoom || this.isEnteringRoom3;
   }
 
   private closePopup(): void {
@@ -846,7 +806,7 @@ export default class CentralHallScene extends Phaser.Scene {
       return;
     }
     this.lastPopupToggleAt = this.time.now;
-    this.closeLeftExerciseAndRestoreInput();
+    this.closePopupAndRestoreInput();
   }
 
   /**
@@ -858,7 +818,7 @@ export default class CentralHallScene extends Phaser.Scene {
    * close the popup; there is no separate success/failure/cancel
    * branch, so there's nothing else that needs to call it.
    */
-  private closeLeftExerciseAndRestoreInput(): void {
+  private closePopupAndRestoreInput(): void {
     if (!this.popup) {
       return;
     }
@@ -879,7 +839,6 @@ export default class CentralHallScene extends Phaser.Scene {
     // elsewhere.
     this.input.enabled = true;
     this.heart?.setSuppressed(false);
-    this.leftDoorway?.setActive(true);
     this.pot?.setActive(true);
   }
 

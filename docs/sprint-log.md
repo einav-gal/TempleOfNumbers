@@ -1042,4 +1042,54 @@ exactly where that landing spot is.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Retire the Left Doorway and Its Placeholder Exercise
+
+### Status
+
+Completed
+
+### Goal
+
+Dim/remove the light at the Central Hall's left entrance, make it
+non-clickable, and remove the exercise behind it — the original
+left-doorway hotspot from Sprint 6 (leading to `PuzzlePlaceholderScene`'s
+single order-of-operations question), unrelated to Entrance 1 (the
+statue/lever passage into the Pink Room).
+
+### Completed
+
+- **`src/scenes/CentralHallScene.ts`:** removed the `Doorway` instance for
+  this spot entirely (field, `LEFT_DOORWAY_*`/`DOORWAY_FADE_OUT_MS`
+  constants, every `setActive()`/`layout()` call site across `create()`,
+  `restoreCentralHallInteractions()`, `openPopup()`,
+  `openFinalStagePopup()`, and the popup-close restore path,
+  `enterLeftDoorway()`, and the `isEnteringPuzzlePlaceholder` guard flag)
+  — since the glow is entirely driven by the object's own active/hovered
+  state, removing the object outright means no glow and no hit zone, with
+  no separate "dim but alive" state needed.
+  - Renamed `closeLeftExerciseAndRestoreInput()` →
+    `closePopupAndRestoreInput()`, since it already closes both the
+    dormant-crystal popup and the "you won" popup — the old name would
+    have been misleading now that the left exercise is gone.
+- **`src/main.ts`:** unregistered `PuzzlePlaceholderScene`.
+- **Deleted `src/scenes/PuzzlePlaceholderScene.ts`** outright (confirmed
+  unreferenced elsewhere first) — no remaining purpose once every real
+  room existed, matching this project's own precedent of deleting whole
+  superseded scene files rather than leaving dead code on disk.
+
+### Out of Scope (respected)
+
+- Entrance 1 (statue/lever/Pink Room passage), the shared `Doorway` class
+  itself (still used by Pink Room/Libra Room/Room 3 exits), and every
+  other Central Hall interaction — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Grepped the whole `src/` tree for `leftDoorway`/`LEFT_DOORWAY`/
+  `PuzzlePlaceholderScene` — zero remaining references outside the
+  deleted file itself.
   open, with no replay.

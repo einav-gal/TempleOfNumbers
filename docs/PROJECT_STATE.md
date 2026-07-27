@@ -2574,6 +2574,42 @@ interaction was touched.
 
 `npm run build` (`tsc && vite build`) passes with no errors.
 
+### Left doorway and its placeholder exercise — retired (completed)
+
+Request: dim/remove the light at the left entrance, make it
+non-clickable, and remove "the exercise" behind it. This is the
+ORIGINAL left-doorway hotspot from Sprint 6 (`Doorway.ts` at background-px
+195,545, leading to `PuzzlePlaceholderScene.ts`'s single order-of-operations
+question) — unrelated to Entrance 1 (the statue/lever passage into the
+Pink Room), which is untouched.
+
+Rather than just dimming it, fully retired it: `CentralHallScene.ts` no
+longer creates a `Doorway` instance for this spot at all (removed the
+field, the `LEFT_DOORWAY_*` constants, every `setActive()`/`layout()` call
+site, `enterLeftDoorway()`, and the `isEnteringPuzzlePlaceholder` guard
+flag) — since `Doorway.ts`'s own glow logic ties directly to its
+active/hovered state, an object that's never created can't glow or
+receive clicks; there was no need for a separate "dim but keep alive"
+half-state. `PuzzlePlaceholderScene.ts` was deleted outright (unregistered
+from `main.ts` first) rather than left on disk unreferenced, since it had
+no remaining purpose once every real room (Pink Room, Libra Room, Room 3)
+existed — matching this project's own precedent of deleting whole
+superseded scene files (see the earlier "Entrance visual + camera
+transition — reverted" entry). The shared `Doorway` class itself is
+untouched (still used by the Pink Room/Libra Room/Room 3 exits).
+
+Also renamed `closeLeftExerciseAndRestoreInput()` → `closePopupAndRestoreInput()`
+(it already closed both the dormant-crystal popup and the new "you won"
+popup, not just anything related to the left exercise — keeping the old
+name would have been actively misleading now that the exercise itself is
+gone).
+
+Files changed: `CentralHallScene.ts`, `main.ts`. File deleted:
+`PuzzlePlaceholderScene.ts`. No other scene, puzzle, or Central Hall
+interaction was touched.
+
+`npm run build` (`tsc && vite build`) passes with no errors.
+
 ## Current State Summary (verified against source)
 
 The entries above are the chronological sprint log. This section is a
@@ -2597,6 +2633,16 @@ it (don't just append below it) whenever one of these systems changes.
   reachable from the Pink Room.
 - Persistent `CrystalHolder` UI (see below) is mounted here too, so
   collected crystals stay visible while in the hall.
+- **Left doorway (removed):** the original left-doorway hotspot
+  (`Doorway.ts` instance at background-px 195,545) and its destination,
+  `PuzzlePlaceholderScene.ts` (a single standalone order-of-operations
+  question, from one of the earliest sprints), have been fully retired —
+  not just disabled. No glow, no hit zone, no scene to enter; the opening
+  itself is now just static background art. `PuzzlePlaceholderScene.ts`
+  was deleted (unregistered from `main.ts`) rather than left on disk
+  unreferenced, since it had no remaining purpose once every real room
+  (Pink Room, Libra Room, Room 3) existed. This is unrelated to Entrance 1
+  below (the statue passage), which is untouched.
 - **Crystal-return mechanism (`CrystalPlacementMode.ts`):** once all three
   crystals are collected, a short Hebrew guidance line ("גררו כל גביש אל
   השקע המתאים במנגנון") appears above the Heart of the Temple, along with
