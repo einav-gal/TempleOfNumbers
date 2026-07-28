@@ -1092,4 +1092,51 @@ statue/lever passage into the Pink Room).
 - Grepped the whole `src/` tree for `leftDoorway`/`LEFT_DOORWAY`/
   `PuzzlePlaceholderScene` — zero remaining references outside the
   deleted file itself.
-  open, with no replay.
+
+---
+
+## Sprint — Wall Wheel Falls to the Floor (Not Sideways)
+
+### Status
+
+Completed
+
+### Goal
+
+Change the wall-wheel opening animation (Room 3's entrance, Entrance 3):
+instead of swinging sideways along an arced hinge path, the disc should
+fall straight down to the floor when clicked — matching the "falling"
+language just established for the Heart of the Temple's rings.
+
+### Completed
+
+- **`src/game/WallWheel.ts`:**
+  - Removed the sideways shift/arc-dip entirely (`OPEN_SHIFT_X_BG`,
+    `OPEN_ARC_DIP_BG`) — the wheel now only ever moves straight down
+    (`OPEN_SHIFT_Y_BG` raised to 520bg-px, toward the floor), tumbling
+    (`OPEN_ROTATION_DEG` raised to 220°) and shrinking slightly, with
+    `Bounce.Out` easing so it visibly lands rather than decelerating to a
+    stop.
+  - `beginSwingOpen()` (a custom progress-tween combining position/angle/
+    scale to produce the old arc) replaced with `beginFallOpen()` —
+    simpler now, since a straight fall needs no custom arc math and can
+    tween the wheel's real `y`/`angle`/`scaleX`/`scaleY` properties
+    directly.
+  - New `fadeWheelAway()`: once landed, the wheel (and its trailing
+    shadow) fade out and disappear — avoids the fallen disc sitting in
+    view over whatever hall elements are beneath the wall mount, and
+    mirrors how the Heart of the Temple's rings disappear after falling.
+  - `restoreOpen()` updated to match: a returning visit's wheel starts
+    already faded/hidden, not positioned at the old sideways-open spot.
+  - The revealed passage opening itself is unaffected — it was always
+    anchored at the wheel's original position, independent of wherever
+    the wheel itself moves.
+
+### Out of Scope (respected)
+
+- No change to the shake phase, the passage reveal/glow, dust burst, or
+  Room 3 itself.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

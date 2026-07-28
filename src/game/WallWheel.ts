@@ -25,17 +25,19 @@ const SHAKE_OFFSET_BG = 4;
 const SHAKE_SETTLE_DROP_BG = 6;
 const DUST_BURST_COUNT = 16;
 
-// The main swing: rotation, an arced (never purely horizontal) slide, and
-// a slight scale-down together read as "a round stone door opening on a
-// hinge, pulling away from the wall" — driven by one continuous progress
-// tween rather than separate position/angle/scale tweens, since the arc
-// term (OPEN_ARC_DIP_BG) needs to combine with the linear slide.
-const OPEN_ROTATION_DEG = 110; // within the requested 90-120 range
-const OPEN_SHIFT_X_BG = -190;
-const OPEN_SHIFT_Y_BG = 42; // permanent resting drop — never a straight horizontal move
-const OPEN_ARC_DIP_BG = 26; // transient mid-swing dip on top of the straight-line path, vanishing by t=1
-const OPEN_SCALE_FACTOR = 0.93; // slightly smaller once fully open — "pulled away from the wall"
-const OPEN_DURATION_MS = 1100; // within the requested 900-1300ms range
+// The main fall: the disc drops straight down to the floor (never
+// sideways), tumbling as it goes, and settling with a bounce — the same
+// "falls open" language as the Heart of the Temple's rings (see
+// HeartOfTheTemple.ts) rather than a hinge-swing. Once landed, it fades
+// away entirely (see fadeWheelAway()) rather than sitting in view in
+// front of whatever hall elements are beneath the wall mount.
+const OPEN_ROTATION_DEG = 220; // tumbles as it falls, more than the previous swing-open
+const OPEN_SHIFT_Y_BG = 520; // falls toward the floor, not sideways
+const OPEN_SCALE_FACTOR = 0.85;
+const OPEN_DURATION_MS = 1300; // generous — Bounce.Out reads best with more time than a plain decelerate
+const OPEN_EASE = Phaser.Math.Easing.Bounce.Out;
+const WHEEL_FADE_DELAY_MS = 300;
+const WHEEL_FADE_DURATION_MS = 500;
 
 const SHADOW_ALPHA_OPEN = 0.5;
 
@@ -54,11 +56,11 @@ export interface WallWheelSize {
  * Separate wall-wheel mechanism for the Central Hall.
  *
  * The wheel is active from the beginning during the current development
- * stage. Clicking it shakes loose, then swings open along an arced path
- * (rotate + slide + slight scale-down, "a stone door on a hinge") to
- * reveal a dark circular passage lit by a weak green glow (Room 3's own
- * crystal light). Only once the swing finishes does the passage become
- * clickable. The scene owns persistence and navigation through the
+ * stage. Clicking it shakes loose, then falls straight down to the floor
+ * (tumbling, with a bounce on landing — never sideways), fading away once
+ * it lands, to reveal a dark circular passage lit by a weak green glow
+ * (Room 3's own crystal light). Only once it lands does the passage
+ * become clickable. The scene owns persistence and navigation through the
  * callbacks.
  */
 export default class WallWheel {
@@ -205,11 +207,10 @@ export default class WallWheel {
     const textureHeight = texture?.height ?? 141;
     const displayHeight = displayWidth * (textureHeight / textureWidth);
 
-    const shiftX = this.isOpen ? OPEN_SHIFT_X_BG * backgroundScale : 0;
     const shiftY = this.isOpen ? OPEN_SHIFT_Y_BG * backgroundScale : 0;
 
     this.wheel
-      ?.setPosition(centerX + shiftX, centerY + shiftY)
+      ?.setPosition(centerX, centerY + shiftY)
       .setDisplaySize(displayWidth, displayHeight)
       .setAngle(this.isOpen ? OPEN_ROTATION_DEG : 0);
 
@@ -226,7 +227,7 @@ export default class WallWheel {
     }
 
     this.shadow
-      ?.setPosition(centerX + shiftX + displayWidth * 0.05, centerY + shiftY + displayWidth * 0.08)
+      ?.setPosition(centerX + displayWidth * 0.05, centerY + shiftY + displayWidth * 0.08)
       .setDisplaySize(displayWidth * 1.05, displayWidth * 1.05);
 
     this.glow
@@ -263,7 +264,10 @@ export default class WallWheel {
     this.glow?.setAlpha(0.18);
     this.passage?.setAlpha(0.9);
     this.passageGlow?.setAlpha(PASSAGE_GLOW_MIN_ALPHA);
-    this.shadow?.setAlpha(SHADOW_ALPHA_OPEN);
+    // The wheel already fell and faded away in whatever earlier session
+    // opened it — jump straight to "gone," never replaying the fall.
+    this.wheel?.setAlpha(0);
+    this.shadow?.setAlpha(0);
     this.setWheelInteractive(false);
     this.setPassageInteractive(true);
     this.layout(this.centerX, this.centerY, this.scale);
@@ -338,50 +342,39 @@ export default class WallWheel {
       ease: Phaser.Math.Easing.Sine.InOut,
       onComplete: () => {
         this.wheel?.setPosition(baseX, baseY + settleDrop);
-        this.beginSwingOpen(baseY + settleDrop);
+        this.beginFallOpen(baseY + settleDrop);
       },
     });
   }
 
-  // The main continuous swing: one progress tween drives position (a
-  // straight-line slide plus a transient sine-arc dip — "not a straight
-  // horizontal movement"), rotation, and a slight scale-down together, so
-  // the whole thing reads as one stone door swinging open on a hinge
-  // rather than several independent, disconnected motions.
-  private beginSwingOpen(startY: number): void {
+  // The main fall: the disc drops straight down from its post-shake
+  // position to the floor, tumbling (rotation) and shrinking slightly
+  // (depth cue) along the way, landing with a bounce — real position/
+  // angle/scale tweens on the wheel itself, no arc/hinge math needed for a
+  // straight drop. Once it lands, it fades away (see fadeWheelAway()).
+  private beginFallOpen(startY: number): void {
     if (!this.wheel) {
       return;
     }
-    const startX = this.centerX;
-    const targetX = this.centerX + OPEN_SHIFT_X_BG * this.scale;
     const targetY = this.centerY + OPEN_SHIFT_Y_BG * this.scale;
-    const dipAmount = OPEN_ARC_DIP_BG * this.scale;
     const baseScaleX = this.wheelBaseScaleX;
     const baseScaleY = this.wheelBaseScaleY;
 
-    const progress = { t: 0 };
+    this.wheel.setPosition(this.centerX, startY).setAngle(0);
     this.openTween = this.scene.tweens.add({
-      targets: progress,
-      t: 1,
+      targets: this.wheel,
+      y: targetY,
+      angle: OPEN_ROTATION_DEG,
+      scaleX: baseScaleX * OPEN_SCALE_FACTOR,
+      scaleY: baseScaleY * OPEN_SCALE_FACTOR,
       duration: OPEN_DURATION_MS,
-      ease: Phaser.Math.Easing.Cubic.InOut,
-      onUpdate: () => {
-        if (!this.wheel) {
-          return;
-        }
-        const t = progress.t;
-        const x = Phaser.Math.Linear(startX, targetX, t);
-        const straightY = Phaser.Math.Linear(startY, targetY, t);
-        const y = straightY + Math.sin(t * Math.PI) * dipAmount;
-        const scaleFactor = Phaser.Math.Linear(1, OPEN_SCALE_FACTOR, t);
-        this.wheel.setPosition(x, y).setAngle(OPEN_ROTATION_DEG * t);
-        this.wheel.setScale(baseScaleX * scaleFactor, baseScaleY * scaleFactor);
-      },
+      ease: OPEN_EASE,
       onComplete: () => {
         this.isOpening = false;
         this.isOpen = true;
         this.setPassageInteractive(true);
         this.startPassageGlowPulse();
+        this.fadeWheelAway();
         this.onOpened?.();
       },
     });
@@ -407,6 +400,21 @@ export default class WallWheel {
       delay: OPEN_DURATION_MS * 0.45,
       duration: OPEN_DURATION_MS * 0.55,
       ease: Phaser.Math.Easing.Sine.InOut,
+    });
+  }
+
+  // Once the wheel lands, it fades away and disappears entirely (along
+  // with its trailing shadow) — simpler than leaving a fallen stone disc
+  // sitting in view over whatever hall elements are beneath the wall
+  // mount, and consistent with how the Heart of the Temple's rings
+  // disappear once they land (see HeartOfTheTemple.ts).
+  private fadeWheelAway(): void {
+    this.scene.tweens.add({
+      targets: [this.wheel, this.shadow],
+      alpha: 0,
+      delay: WHEEL_FADE_DELAY_MS,
+      duration: WHEEL_FADE_DURATION_MS,
+      ease: Phaser.Math.Easing.Sine.In,
     });
   }
 

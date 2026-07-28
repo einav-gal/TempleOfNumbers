@@ -2631,6 +2631,15 @@ it (don't just append below it) whenever one of these systems changes.
   pan/zoom transition → `LibraRoomScene`. State persisted via registry
   flag `libraFloorEntranceOpen`. Entirely separate from Entrance 1; not
   reachable from the Pink Room.
+- **Entrance 3 (wall wheel, `WallWheel.ts`):** active from the beginning
+  (no prerequisite). Clicking the wheel shakes it loose, then it falls
+  straight down toward the floor — tumbling, landing with a bounce, never
+  sliding sideways — fading away entirely once it lands (rather than
+  sitting in view over whatever's beneath the wall mount), revealing a
+  dark circular passage lit by a weak green glow (Room 3's own crystal
+  color). Camera pan/zoom into the opening → `Room3Scene`. State
+  persisted via registry flag `wallWheelOpen`; a returning visit restores
+  straight to "already fallen and faded," no replay.
 - Persistent `CrystalHolder` UI (see below) is mounted here too, so
   collected crystals stay visible while in the hall.
 - **Left doorway (removed):** the original left-doorway hotspot
