@@ -1140,3 +1140,33 @@ language just established for the Heart of the Temple's rings.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Removed Room 3's "Back to Main Hall" Text Hint
+
+### Status
+
+Completed
+
+### Goal
+
+Remove the "חזרה לאולם הראשי" text label above Room 3's stairwell exit.
+
+### Completed
+
+- **`src/scenes/Room3Scene.ts`:** removed `EXIT_HINT_TEXT`/
+  `EXIT_HINT_GAP_BG`/`EXIT_HINT_FONT_PX`/`EXIT_HINT_DEPTH`, the
+  `exitHintText` field, its creation in `create()`, and its repositioning
+  in `layout()`. Removed the now-unused `createRtlText` import. The exit
+  doorway itself (`Doorway.ts` — hover glow, hand cursor, click-to-return)
+  is completely unchanged.
+
+### Out of Scope (respected)
+
+- The doorway/exit mechanism itself, the puzzle, the crystal, and
+  everything else in Room 3 — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

@@ -4,7 +4,6 @@ import bigCrystalImageUrl from '../../assets/images/Room3/green-crystal.png';
 import Doorway from '../game/Doorway';
 import CrystalHolder from '../game/CrystalHolder';
 import MapFractionPuzzle from '../game/MapFractionPuzzle';
-import { createRtlText } from '../game/rtlText';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from '../game/scaleMode';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 
@@ -24,15 +23,6 @@ const EXIT_SIZE = { widthBg: 210, heightBg: 250 };
 const PUZZLE_EXIT_CLEARANCE_PX = 24;
 const PUZZLE_SAFE_MARGIN_PX = 16;
 const PUZZLE_DEPTH = 5;
-
-// A visual hint above the stairwell exit — already fully interactive
-// (Doorway.ts provides the hand cursor, idle glow, and hover intensify)
-// both before and after the puzzle is solved; this just makes clear what
-// it leads back to.
-const EXIT_HINT_TEXT = 'חזרה לאולם הראשי';
-const EXIT_HINT_GAP_BG = 40; // bg-px above the doorway's own hitbox
-const EXIT_HINT_FONT_PX = 20;
-const EXIT_HINT_DEPTH = 3;
 
 // The room's own big green crystal (green-crystal.png) — placed to the
 // right of the map, vertically centered on the same row, so it's always
@@ -96,7 +86,6 @@ const EXIT_FADE_MS = 400;
 export default class Room3Scene extends Phaser.Scene {
   private background?: Phaser.GameObjects.Image;
   private exit?: Doorway;
-  private exitHintText?: Phaser.GameObjects.Text;
   private crystalHolder?: CrystalHolder;
   private mapPuzzle?: MapFractionPuzzle;
   private mapPuzzleCreated = false;
@@ -136,16 +125,6 @@ export default class Room3Scene extends Phaser.Scene {
     this.exit.create();
     this.exit.setActive(true);
     this.exit.onActivate = () => this.returnToCentralHall();
-
-    this.exitHintText = createRtlText(this, 0, 0, EXIT_HINT_TEXT, {
-      fontSize: `${EXIT_HINT_FONT_PX}px`,
-      color: '#ffe9c9',
-      stroke: '#2a1508',
-      strokeThickness: 4,
-      align: 'center',
-    })
-      .setOrigin(0.5)
-      .setDepth(EXIT_HINT_DEPTH);
 
     this.crystalHolder = new CrystalHolder(this);
     this.crystalHolder.create(OVERLAY_DEPTH - 10);
@@ -230,11 +209,6 @@ export default class Room3Scene extends Phaser.Scene {
     const exitScreenX = toScreenX(EXIT_CENTER_X);
     const exitScreenY = toScreenY(EXIT_CENTER_Y);
     this.exit?.layout(exitScreenX, exitScreenY, this.backgroundScale);
-
-    const exitHintY = toScreenY(EXIT_CENTER_Y - EXIT_SIZE.heightBg / 2 - EXIT_HINT_GAP_BG);
-    this.exitHintText
-      ?.setPosition(exitScreenX, exitHintY)
-      .setFontSize(EXIT_HINT_FONT_PX * this.backgroundScale);
 
     this.overlay?.setSize(width, height);
 

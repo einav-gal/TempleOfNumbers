@@ -2795,9 +2795,10 @@ it (don't just append below it) whenever one of these systems changes.
   the reward sequence starts so the reward shard's flight has a fixed
   target.
 - **Exit:** the background's own painted stairwell, made interactive via
-  `Doorway.ts` (same technique as the other rooms), with a text hint
-  above it ("חזרה לאולם הראשי"). Return transition matches the other
-  rooms' short zoom/fade pattern.
+  `Doorway.ts` (same technique as the other rooms) — the "חזרה לאולם
+  הראשי" text hint above it was removed (the doorway's own hover glow/hand
+  cursor already make it discoverable). Return transition matches the
+  other rooms' short zoom/fade pattern.
 
 ### Mobile responsiveness & pinch-to-zoom (global system)
 
