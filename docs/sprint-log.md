@@ -1170,3 +1170,60 @@ Remove the "חזרה לאולם הראשי" text label above Room 3's stairwell 
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Hint Button for the Hall's Three Hidden Discovery Targets
+
+### Status
+
+Completed
+
+### Goal
+
+Add a hint system for the Central Hall's three hidden interactive
+entrances (pot/lever/statue passage, floor seal, wall wheel), landed on
+after a design discussion: an opt-in button showing atmospheric guiding
+QUESTIONS (two escalating tiers per target), not literal instructions —
+and deliberately NOT math-related (math stays inside each room's own
+puzzle; an earlier attempt at a math-flavored hint for the pot was
+rejected as feeling disconnected/fabricated).
+
+### Completed
+
+- **`src/game/GameState.ts`:** promoted `leftStatueOpen`/
+  `isFloorEntranceOpen`/`wallWheelOpen` from `CentralHallScene.ts`-local
+  consts to proper exported getters/setters
+  (`isLeftStatuePassageOpen`/`setLeftStatuePassageOpen`, etc. — same key
+  strings, no behavior change), so the new hint system can read them
+  without duplicating raw registry key strings in a second file.
+- **`src/scenes/CentralHallScene.ts`:** updated to use the new GameState
+  functions instead of its own inline `registry.get`/`.set` calls for
+  those three flags.
+- **New `src/game/HintSystem.ts`:** a small screen-fixed "רמז" button
+  (bottom-left), hidden whenever nothing is pending. Three hint
+  definitions (pot, floor tile, wheel), each with an `isAvailable`/
+  `isDiscovered` check against the shared registry and two Hebrew guiding
+  questions. Clicking the button cycles through pending targets, showing
+  tier 1 the first time a target comes up, tier 2 (a more specific
+  question) the next time. Self-contained: its own small dismiss-on-click
+  popup (not reusing `CentralHallScene`'s crystal-popup machinery), a
+  visibility poll (1s) so the button hides itself live as targets are
+  discovered, and the same "shared debounce timestamp between open and a
+  global dismiss-listener" pattern `CentralHallScene`'s own popup already
+  uses, so the same click that opens a hint can never also instantly
+  close it.
+- Instantiated only in `CentralHallScene.ts` — the three targets are all
+  physically there; no other scene needs it.
+
+### Out of Scope (respected)
+
+- The subtle visual-cue idea discussed earlier — not built this pass,
+  purely the opt-in question/hint button.
+- No math content in these hints — math stays inside each room's own
+  puzzle.
+- No other scene, puzzle, or unrelated Central Hall interaction touched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

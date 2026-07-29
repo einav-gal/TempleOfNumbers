@@ -14,7 +14,19 @@ import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 import CrystalPlacementMode from '../game/CrystalPlacementMode';
-import { hasSeenGameIntro, markGameIntroSeen, areAllCrystalsCollected, areAllCrystalsPlaced } from '../game/GameState';
+import HintSystem from '../game/HintSystem';
+import {
+  hasSeenGameIntro,
+  markGameIntroSeen,
+  areAllCrystalsCollected,
+  areAllCrystalsPlaced,
+  isLeftStatuePassageOpen,
+  setLeftStatuePassageOpen,
+  isFloorEntranceOpen,
+  setFloorEntranceOpen,
+  isWallWheelOpen,
+  setWallWheelOpen,
+} from '../game/GameState';
 import { FONT_FAMILY } from '../game/textStyle';
 import { createRtlText } from '../game/rtlText';
 import handleUrl from '../../assets/images/central-hall/handle/handle.png';
@@ -128,28 +140,16 @@ const FINAL_STAGE_POPUP_TEXT = 'הצלחתם לצאת מהמקדש!';
 // recreates a Scene from scratch, so anything the player already did
 // (pot fallen, lever pulled, statue open) would otherwise be lost on
 // return from whichever room the entrance leads to (currently
-// PinkRoomScene). Phaser's own registry is a game-wide key/value store
-// that survives scene restarts, so it's used here rather than inventing
-// a second, competing state system — this flag is read regardless of the
-// return path, so it doesn't need to change if the destination does.
-const STATE_KEY_LEFT_STATUE_OPEN = 'leftStatueOpen';
-
-// Same pattern as STATE_KEY_LEFT_STATUE_OPEN, for the floor entrance's own
-// opened state — checked regardless of which room the player is
-// returning from. Not tied to any other room's progress or reward; the
-// floor entrance is available and clickable from the very first time
-// Central Hall is shown.
-const STATE_KEY_FLOOR_ENTRANCE_OPEN = 'isFloorEntranceOpen';
+// PinkRoomScene). Persisted via GameState.ts's isLeftStatuePassageOpen()/
+// setLeftStatuePassageOpen() (Phaser's own registry, not a second,
+// competing state system) — read regardless of the return path, so it
+// doesn't need to change if the destination does.
 
 // Separate circular wall mechanism, measured in the 1536x1024 Central Hall
 // background. The visible wheel is centered over the circular brick recess.
 const WALL_WHEEL_CENTER_X = 768;
 const WALL_WHEEL_CENTER_Y = 286;
 const WALL_WHEEL_WIDTH_BG = 185;
-
-// Temporary development state: the wheel is active from the beginning.
-// Once opened, this flag preserves the open passage across room returns.
-const STATE_KEY_WALL_WHEEL_OPEN = 'wallWheelOpen';
 
 const WHEEL_ENTRY_DURATION_MS = 850;
 const WHEEL_ENTRY_FILL_FRACTION = 0.7;
@@ -171,6 +171,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private wallWheel?: WallWheel;
   private pinchZoom?: MobilePinchZoom;
   private crystalPlacementMode?: CrystalPlacementMode;
+  private hintSystem?: HintSystem;
   // Independent per-destination transition guards — never one shared
   // lock. Each is reset to false at the top of create() (Phaser reuses
   // this Scene instance across stop()/start(), so without the reset a
@@ -224,7 +225,7 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.wallWheel = new WallWheel(this, { widthBg: WALL_WHEEL_WIDTH_BG });
     this.wallWheel.create(WALL_WHEEL_DEPTH);
-    this.wallWheel.onOpened = () => this.registry.set(STATE_KEY_WALL_WHEEL_OPEN, true);
+    this.wallWheel.onOpened = () => setWallWheelOpen(this.registry);
     this.wallWheel.onActivate = () => this.enterRoom3ThroughWheel();
 
     // Plain full-viewport rectangle, fixed to screen (scrollFactor 0) so
@@ -244,6 +245,12 @@ export default class CentralHallScene extends Phaser.Scene {
     // so it never shows through a scene-cut.
     this.crystalHolder = new CrystalHolder(this);
     this.crystalHolder.create(OVERLAY_DEPTH - 10);
+
+    // Small always-in-the-corner "hint" button for the hall's three hidden
+    // discovery targets (pot, floor tile, wall wheel) — hides itself
+    // whenever nothing is currently pending; see HintSystem.ts.
+    this.hintSystem = new HintSystem(this);
+    this.hintSystem.create();
 
     // Stage 1 of "return the crystals": only exists at all once every
     // crystal has actually been collected (same shared registry state
@@ -309,7 +316,7 @@ export default class CentralHallScene extends Phaser.Scene {
     // sequence on a previous visit, jump straight to that end state
     // instead of replaying it — before the first layout() call, so
     // nothing flashes through its closed/default appearance first.
-    if (this.registry.get(STATE_KEY_LEFT_STATUE_OPEN)) {
+    if (isLeftStatuePassageOpen(this.registry)) {
       this.pot.restoreFallen();
       this.handle.restoreActivated();
       this.statue.restoreOpen();
@@ -323,7 +330,7 @@ export default class CentralHallScene extends Phaser.Scene {
     // — not gated behind any other room's progress or reward.
     this.floorEntrance = new FloorEntrance(this, { widthBg: FLOOR_ENTRANCE_WIDTH_BG });
     this.floorEntrance.create(FLOOR_ENTRANCE_DEPTH);
-    this.floorEntrance.onOpened = () => this.registry.set(STATE_KEY_FLOOR_ENTRANCE_OPEN, true);
+    this.floorEntrance.onOpened = () => setFloorEntranceOpen(this.registry);
     this.floorEntrance.onActivate = () => this.enterLibraRoomThroughStairs();
 
     // If the seal was already opened on a previous visit, jump straight
@@ -369,11 +376,11 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.layout(this.scale.width, this.scale.height);
 
-    if (this.registry.get(STATE_KEY_FLOOR_ENTRANCE_OPEN)) {
+    if (isFloorEntranceOpen(this.registry)) {
       this.floorEntrance?.restoreOpen();
     }
 
-    if (this.registry.get(STATE_KEY_WALL_WHEEL_OPEN)) {
+    if (isWallWheelOpen(this.registry)) {
       this.wallWheel?.restoreOpen();
     }
 
@@ -392,6 +399,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.wallWheel?.destroy();
       this.pinchZoom?.destroy();
       this.crystalPlacementMode?.destroy();
+      this.hintSystem?.destroy();
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
@@ -412,7 +420,7 @@ export default class CentralHallScene extends Phaser.Scene {
     const introSeen = hasSeenGameIntro(this.registry);
     this.pot?.setActive(introSeen);
 
-    if (this.registry.get(STATE_KEY_LEFT_STATUE_OPEN)) {
+    if (isLeftStatuePassageOpen(this.registry)) {
       this.entrance?.setActive(true);
     }
     // The floor entrance manages its own interactivity/hit-area state
@@ -484,6 +492,7 @@ export default class CentralHallScene extends Phaser.Scene {
     );
 
     this.crystalPlacementMode?.layout(toScreenX, toScreenY, this.backgroundScale);
+    this.hintSystem?.layout();
 
     this.intro?.layout(width, height);
 
@@ -618,7 +627,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.entrance?.reveal(STATUE_TURN_DURATION_MS);
     this.statue?.open(STATUE_TURN_DURATION_MS, () => {
       this.entrance?.setActive(true);
-      this.registry.set(STATE_KEY_LEFT_STATUE_OPEN, true);
+      setLeftStatuePassageOpen(this.registry);
     });
   }
 

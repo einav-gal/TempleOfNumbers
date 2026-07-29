@@ -20,6 +20,15 @@ const STATE_KEY_ROOM3_PUZZLE_SOLVED = 'room3PuzzleSolved';
 const STATE_KEY_CRYSTAL_PLACEMENT = 'crystalPlacement';
 const STATE_KEY_DEBUG_MODE_ACTIVE = 'debugModeActive';
 
+// Central Hall's own three discovery flags — promoted here (from
+// CentralHallScene.ts's own former local consts) so HintSystem.ts can read
+// them too without duplicating the raw key strings in a second file. Same
+// key strings as before, so no behavior change for any already-running
+// session.
+const STATE_KEY_LEFT_STATUE_OPEN = 'leftStatueOpen';
+const STATE_KEY_FLOOR_ENTRANCE_OPEN = 'isFloorEntranceOpen';
+const STATE_KEY_WALL_WHEEL_OPEN = 'wallWheelOpen';
+
 const DEBUG_QUERY_PARAM = 'debug';
 const DEBUG_QUERY_VALUE_FINAL_STAGE = 'final';
 const DEBUG_QUERY_VALUE_RESET = 'reset';
@@ -142,6 +151,35 @@ export function setCrystalPlaced(registry: Phaser.Data.DataManager, id: CrystalI
 export function areAllCrystalsPlaced(registry: Phaser.Data.DataManager): boolean {
   const state = getCrystalPlacementState(registry);
   return CRYSTAL_IDS.every((id) => state[id]);
+}
+
+// ---- Central Hall discovery flags ---------------------------------------
+
+/** True once the pot -> lever -> statue -> entrance sequence has fully opened (never re-closed). */
+export function isLeftStatuePassageOpen(registry: Phaser.Data.DataManager): boolean {
+  return registry.get(STATE_KEY_LEFT_STATUE_OPEN) === true;
+}
+
+export function setLeftStatuePassageOpen(registry: Phaser.Data.DataManager): void {
+  registry.set(STATE_KEY_LEFT_STATUE_OPEN, true);
+}
+
+/** True once the floor seal has opened into the Libra Room's stairwell (never re-closed). */
+export function isFloorEntranceOpen(registry: Phaser.Data.DataManager): boolean {
+  return registry.get(STATE_KEY_FLOOR_ENTRANCE_OPEN) === true;
+}
+
+export function setFloorEntranceOpen(registry: Phaser.Data.DataManager): void {
+  registry.set(STATE_KEY_FLOOR_ENTRANCE_OPEN, true);
+}
+
+/** True once the wall wheel has fallen and revealed Room 3's passage (never re-closed). */
+export function isWallWheelOpen(registry: Phaser.Data.DataManager): boolean {
+  return registry.get(STATE_KEY_WALL_WHEEL_OPEN) === true;
+}
+
+export function setWallWheelOpen(registry: Phaser.Data.DataManager): void {
+  registry.set(STATE_KEY_WALL_WHEEL_OPEN, true);
 }
 
 // ---- debug mode (?debug=final / ?debug=reset query params) -------------

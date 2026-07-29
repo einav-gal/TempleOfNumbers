@@ -2610,6 +2610,41 @@ interaction was touched.
 
 `npm run build` (`tsc && vite build`) passes with no errors.
 
+### Hint system for the hall's three hidden discovery targets (completed)
+
+Design discussion first (see this task's own conversation): decided on a
+combination — subtle visual cues stay ambient (unchanged, out of scope
+here), and an opt-in "hint" button shows atmospheric guiding QUESTIONS
+(not literal instructions) that a player can request, so players who
+don't need help are never spoiled. Math was deliberately kept OUT of
+these navigation hints after discussion — it stays inside each room's own
+puzzle, where it actually belongs; a fabricated "ratio" hint for the pot
+was tried and rejected as feeling disconnected from anything real in the
+game.
+
+**Registry keys promoted to `GameState.ts`:** `leftStatueOpen`/
+`isFloorEntranceOpen`/`wallWheelOpen` were previously local consts inside
+`CentralHallScene.ts` — promoted to proper `GameState.ts` getters/setters
+(`isLeftStatuePassageOpen`/`setLeftStatuePassageOpen`, etc., same key
+strings, no behavior change) so the new `HintSystem.ts` could read them
+without duplicating raw string keys in a second file (which would have
+been exactly the kind of state-drift risk this project's "single shared
+GameState module" convention exists to avoid). `CentralHallScene.ts`
+itself was updated to use the same new functions instead of its own
+inline `registry.get/set` calls.
+
+**New `src/game/HintSystem.ts`:** see the matching "Hint system" entry in
+the Current State Summary below for the full description. Instantiated
+only in `CentralHallScene.ts` (the three targets are all physically
+there); not used in any other scene.
+
+Files changed: `GameState.ts` (promoted keys), `CentralHallScene.ts`
+(wiring + updated to the new GameState functions). File created:
+`HintSystem.ts`. No puzzle logic, room content, or unrelated interaction
+was touched.
+
+`npm run build` (`tsc && vite build`) passes with no errors.
+
 ## Current State Summary (verified against source)
 
 The entries above are the chronological sprint log. This section is a
@@ -2642,6 +2677,20 @@ it (don't just append below it) whenever one of these systems changes.
   straight to "already fallen and faded," no replay.
 - Persistent `CrystalHolder` UI (see below) is mounted here too, so
   collected crystals stay visible while in the hall.
+- **Hint system (`HintSystem.ts`):** a small, screen-fixed "רמז" (hint)
+  button in the bottom-left corner, hidden whenever nothing is currently
+  pending — visible only while at least one of the hall's three
+  discovery targets (pot/lever/statue passage, floor seal, wall wheel) is
+  both *available* (e.g. the floor tile only counts once the Pink Room
+  shard is held) and *not yet discovered* (its own registry flag not yet
+  set). Clicking it cycles through whichever targets are still pending,
+  showing one of two atmospheric guiding QUESTIONS per target (a vaguer
+  one first, a more specific one the next time that same target comes up)
+  in a small dismiss-on-click popup — never a literal instruction ("click
+  the pot"), and deliberately never math-related (math stays inside each
+  room's own puzzle, not in a "where do I click" hint). Self-contained:
+  only reads the shared registry via `GameState.ts` for prerequisites/
+  discovery, no dependency on `CentralHallScene`'s own internals.
 - **Left doorway (removed):** the original left-doorway hotspot
   (`Doorway.ts` instance at background-px 195,545) and its destination,
   `PuzzlePlaceholderScene.ts` (a single standalone order-of-operations
