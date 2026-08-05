@@ -6,6 +6,7 @@ import {
   isFloorEntranceOpen,
   isWallWheelOpen,
 } from './GameState';
+import { isEnvelopScaleMode, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
 
 interface HintDefinition {
   id: string;
@@ -122,12 +123,23 @@ export default class HintSystem {
     });
   }
 
-  /** Screen-fixed bottom-left corner; safe to call anytime (e.g. on every resize) — reads current scale directly, no args needed. */
+  /**
+   * Screen-fixed bottom-left corner; safe to call anytime (e.g. on every
+   * resize) — reads current scale directly, no args needed. On short
+   * phone-landscape screens (ENVELOP scale mode) the fixed 1536x1024
+   * design canvas is cropped along its bottom edge, so a plain
+   * `height - margin` position would fall inside the cropped-off region —
+   * pulled up by the same shared safe margin `CrystalHolder.ts`/
+   * `Room3Scene.ts`/`IntroOverlay.ts` already use in that case.
+   */
   layout(): void {
     const width = this.scene.scale.width;
     const height = this.scene.scale.height;
+    const bottomMargin = isEnvelopScaleMode(this.scene)
+      ? ENVELOP_BOTTOM_SAFE_MARGIN_PX
+      : BUTTON_MARGIN_PX + BUTTON_SIZE_PX / 2;
 
-    this.buttonContainer?.setPosition(BUTTON_MARGIN_PX + BUTTON_SIZE_PX / 2, height - BUTTON_MARGIN_PX - BUTTON_SIZE_PX / 2);
+    this.buttonContainer?.setPosition(BUTTON_MARGIN_PX + BUTTON_SIZE_PX / 2, height - bottomMargin);
 
     if (this.popupContainer) {
       this.popupContainer.setPosition(width / 2, height / 2);
