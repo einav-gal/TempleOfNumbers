@@ -533,12 +533,12 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart?.setSuppressed(true);
 
-    const panelWidth = Math.min(width * 0.8, 620);
-    const panelHeight = 190;
+    const panelWidth = Math.min(width * 0.85, 680);
+    const panelHeight = 210;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
     const message = createRtlText(this, 0, -12, POPUP_TEXT, {
-      fontSize: `${Math.max(18, Math.min(26, width * 0.02))}px`,
+      fontSize: `${Math.max(22, Math.min(32, width * 0.024))}px`,
       color: '#d9cfae',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
@@ -546,7 +546,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: '13px',
+      fontSize: '16px',
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);
@@ -586,12 +586,12 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart?.setSuppressed(true);
 
-    const panelWidth = Math.min(width * 0.8, 620);
-    const panelHeight = 190;
+    const panelWidth = Math.min(width * 0.85, 680);
+    const panelHeight = 210;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
     const message = createRtlText(this, 0, -12, FINAL_STAGE_POPUP_TEXT, {
-      fontSize: `${Math.max(18, Math.min(26, width * 0.02))}px`,
+      fontSize: `${Math.max(22, Math.min(32, width * 0.024))}px`,
       color: '#d9cfae',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
@@ -599,7 +599,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: '13px',
+      fontSize: '16px',
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);

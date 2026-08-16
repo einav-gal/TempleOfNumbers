@@ -12,25 +12,30 @@ const GLOW_TEXTURE_KEY = 'pink-puzzle-feedback-glow';
 // overlap during a transition.
 const POPUP_DEPTH = 58;
 
-const NORMAL_WIDTH_PX = 420;
-const NORMAL_HEIGHT_PX = 170;
-const NORMAL_TITLE_FONT_PX = 38;
-const NORMAL_BODY_FONT_PX = 26;
-const NORMAL_TITLE_OFFSET_Y_PX = -34;
-const NORMAL_BODY_OFFSET_Y_PX = 26;
+// Bumped up (font sizes and panel dimensions together) after real-device
+// feedback that this popup's text read too small — bodies here are all
+// short single lines (see each puzzle's own FEEDBACK_*_BODY constants),
+// and the title already has its own auto-shrink safety net
+// (fitTitleToFrame()), so there's comfortable headroom for this increase.
+const NORMAL_WIDTH_PX = 460;
+const NORMAL_HEIGHT_PX = 190;
+const NORMAL_TITLE_FONT_PX = 42;
+const NORMAL_BODY_FONT_PX = 29;
+const NORMAL_TITLE_OFFSET_Y_PX = -36;
+const NORMAL_BODY_OFFSET_Y_PX = 28;
 
-const HINT_WIDTH_PX = 340;
-const HINT_HEIGHT_PX = 130;
-const HINT_TITLE_FONT_PX = 24;
-const HINT_BODY_FONT_PX = 17;
-const HINT_TITLE_OFFSET_Y_PX = -26;
-const HINT_BODY_OFFSET_Y_PX = 18;
+const HINT_WIDTH_PX = 370;
+const HINT_HEIGHT_PX = 145;
+const HINT_TITLE_FONT_PX = 27;
+const HINT_BODY_FONT_PX = 19;
+const HINT_TITLE_OFFSET_Y_PX = -28;
+const HINT_BODY_OFFSET_Y_PX = 19;
 
 const NORMAL_BODY_WRAP_WIDTH_PX = NORMAL_WIDTH_PX - 60;
 const HINT_BODY_WRAP_WIDTH_PX = HINT_WIDTH_PX - 50;
 const NORMAL_TITLE_MAX_WIDTH_PX = NORMAL_WIDTH_PX - 40;
 const HINT_TITLE_MAX_WIDTH_PX = HINT_WIDTH_PX - 40;
-const TITLE_MIN_FONT_SIZE_PX = 28;
+const TITLE_MIN_FONT_SIZE_PX = 30;
 
 const FADE_MS = 220;
 const PULSE_CYCLE_MS = 260;

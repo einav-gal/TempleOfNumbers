@@ -182,16 +182,19 @@ const BRIGHT_WRONG_CSS = '#f87171'; // bright — used against the feedback over
 // Positioned centered above the answer-card row every layout() call (see
 // layout()), so it always sits in a clear central area that never
 // reaches the title strip, the code banner, or the room's crystal.
-const FEEDBACK_WIDTH_PX = 480;
-const FEEDBACK_HEIGHT_PX = 250;
+// Panel widened slightly and the sub-line bumped up alongside the other
+// popups' font increases (real-device legibility feedback) — the title
+// itself stays within its earlier-requested 36-44px range, unchanged.
+const FEEDBACK_WIDTH_PX = 500;
+const FEEDBACK_HEIGHT_PX = 260;
 const FEEDBACK_ICON_OFFSET_Y_PX = -66;
 const FEEDBACK_ICON_FONT_PX = 76;
 const FEEDBACK_TITLE_OFFSET_Y_PX = 20;
 const FEEDBACK_TITLE_FONT_PX = 40; // within the requested 36-44px range
 const FEEDBACK_TITLE_MAX_WIDTH_PX = FEEDBACK_WIDTH_PX - 60;
 const FEEDBACK_TITLE_MIN_FONT_PX = 30;
-const FEEDBACK_SUB_OFFSET_Y_PX = 76;
-const FEEDBACK_SUB_FONT_PX = 26;
+const FEEDBACK_SUB_OFFSET_Y_PX = 78;
+const FEEDBACK_SUB_FONT_PX = 28;
 const FEEDBACK_FADE_MS = 200;
 const FEEDBACK_DEPTH_OFFSET = 3; // above the title strip (+2) and cards (+1)
 

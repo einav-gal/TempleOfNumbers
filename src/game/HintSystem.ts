@@ -65,7 +65,8 @@ const HINTS: HintDefinition[] = [
   },
 ];
 
-const BUTTON_SIZE_PX = 56;
+const BUTTON_SIZE_PX = 76;
+const BUTTON_LABEL_FONT_PX = 26;
 // Gap kept between the CrystalHolder pouch's bottom edge and this
 // button's top edge, so the two read as one grouped cluster in the
 // top-left corner rather than accidentally touching.
@@ -77,15 +78,16 @@ const VISIBILITY_POLL_MS = 1000;
 const BUTTON_LABEL = 'רמז';
 const CLOSE_HINT_TEXT = '— לחצו לסגירה —';
 
-// Bumped up from an earlier 560/200/22/13 — reported hard to read on a
-// laptop-sized window (the design canvas is fixed at 1536x1024 and scales
-// uniformly to fit any real viewport, so a modest window renders every
-// design-px measurement proportionally smaller; these are simply sized
-// more generously to stay legible at that end of the range too).
-const POPUP_PANEL_WIDTH_MAX_PX = 640;
-const POPUP_PANEL_HEIGHT_PX = 230;
-const POPUP_TEXT_FONT_PX = 28;
-const POPUP_CLOSE_HINT_FONT_PX = 16;
+// Bumped up a second time (was 640/230/28/16, before that 560/200/22/13)
+// — still reported too small on a laptop-sized window. The design canvas
+// is fixed at 1536x1024 and scales uniformly to fit any real viewport, so
+// a modest browser window renders every design-px measurement
+// proportionally smaller; these are simply sized more generously to stay
+// legible at that end of the range too.
+const POPUP_PANEL_WIDTH_MAX_PX = 720;
+const POPUP_PANEL_HEIGHT_PX = 280;
+const POPUP_TEXT_FONT_PX = 34;
+const POPUP_CLOSE_HINT_FONT_PX = 18;
 
 /**
  * A small, always-in-the-corner "hint" button for Central Hall's three
@@ -126,7 +128,7 @@ export default class HintSystem {
     this.drawButtonBg(bg, false);
 
     const label = createRtlText(this.scene, 0, 0, BUTTON_LABEL, {
-      fontSize: '18px',
+      fontSize: `${BUTTON_LABEL_FONT_PX}px`,
       color: '#f2e9d8',
     }).setOrigin(0.5);
 
@@ -241,7 +243,7 @@ export default class HintSystem {
 
     const overlay = this.scene.add.rectangle(-width / 2, -height / 2, width, height, 0x000000, 0.55).setOrigin(0, 0);
 
-    const panelWidth = Math.min(width * 0.85, POPUP_PANEL_WIDTH_MAX_PX);
+    const panelWidth = Math.min(width * 0.9, POPUP_PANEL_WIDTH_MAX_PX);
     const panelHeight = POPUP_PANEL_HEIGHT_PX;
     const backdrop = this.scene.add
       .rectangle(0, 0, panelWidth, panelHeight, 0x241f19, 0.96)

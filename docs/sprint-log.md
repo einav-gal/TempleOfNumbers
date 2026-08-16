@@ -1536,3 +1536,61 @@ question genuinely replaces it.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Significant Text-Legibility Pass Across All Instructions/Hints/Messages
+
+### Status
+
+Completed
+
+### Goal
+
+Continued real-device/laptop feedback: the hint button, the word "רמז"
+on it, and text throughout the game's instructions/hints/messages still
+read too small. A significant, game-wide increase to every shared popup
+component, not just the hint popup touched in the previous sprint.
+
+### Completed
+
+- **`src/game/HintSystem.ts`:** button `56px→76px`, its "רמז" label
+  `18px→26px`; the hint popup itself bumped a second time — panel
+  `640px→720px` (0.85→0.9 of viewport width), `230px→280px` tall, message
+  text `28px→34px`, close-hint `16px→18px`.
+- **`src/game/RoundIntroPopup.ts`** (both `default` and `compact`
+  variants — the one-time room-intro/puzzle-intro popups): panel
+  width/height, title/body font sizes, title-to-body/body-to-button gaps,
+  and the confirm button's own size/label all bumped up together — not
+  just proportionally, but with genuine extra safety margin, since the
+  actual body copy (`PUZZLE_INTRO_BODY`/`ROOM_INTRO_BODY`) is long,
+  multi-paragraph text whose wrapped line count grows with font size.
+  `default`: 560×560→620×680, title 38→42, body 26→29. `compact`:
+  420×300→470×380, title 28→31, body 19→22.
+- **`src/game/FeedbackPopup.ts`** (the shared correct/incorrect/
+  duplicate/completed/hint popup used by `EquivalencePuzzle.ts` and
+  `LibraPuzzle.ts`): `normal` 420×170→460×190, title 38→42, body 26→29;
+  `hint` 340×130→370×145, title 24→27, body 17→19. Low overflow risk —
+  every room's feedback body text is a short single line, and the title
+  already had its own auto-shrink safety net (`fitTitleToFrame()`).
+- **`src/game/MapFractionPuzzle.ts`** (Room 3's own inline feedback
+  overlay): panel 480×250→500×260, sub-line 26px→28px. The title itself
+  stayed at its earlier explicitly-requested 36-44px range, untouched.
+- **`src/scenes/CentralHallScene.ts`** (the dormant-crystal and "you
+  won" popups, `openPopup()`/`openFinalStagePopup()`): panel
+  `620px→680px` cap (0.8→0.85 of viewport width), `190px→210px` tall,
+  message font formula `max(18, min(26, width*0.02))` →
+  `max(22, min(32, width*0.024))`, close-hint `13px→16px`.
+
+### Out of Scope (respected)
+
+- Puzzle content/gameplay logic in every touched file — only sizing
+  constants (fonts, panel dimensions, gaps, button size) changed.
+- Sizing was reasoned through against each popup's actual (mostly short)
+  body copy to judge overflow risk, but not visually verified in a live
+  browser — flagged to the user to check on her own laptop and report
+  back if anything still looks off or overflows.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

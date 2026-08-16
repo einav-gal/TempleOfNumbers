@@ -38,45 +38,50 @@ interface VariantConfig {
   buttonLabelFontSize: number;
 }
 
+// Both variants bumped up (font sizes and, more generously, panel
+// dimensions/gaps — not just proportionally, but with genuine extra
+// safety margin, since the actual body copy is long, multi-paragraph
+// text whose wrapped line count grows with font size) after real-device
+// feedback that the room-intro/hint text across the game reads too small.
 const VARIANT_CONFIG: Record<RoundIntroPopupVariant, VariantConfig> = {
   default: {
-    widthPx: 560,
-    heightPx: 560,
+    widthPx: 620,
+    heightPx: 680,
     paddingPx: 44,
-    titleFontSize: 38,
-    bodyFontSize: 26,
-    bodyLineSpacing: 14,
+    titleFontSize: 42,
+    bodyFontSize: 29,
+    bodyLineSpacing: 16,
     titleTopPaddingPx: 40,
-    gapTitleToBodyPx: 66,
-    gapBodyToButtonPx: 44,
-    buttonWidthPx: 168,
-    buttonHeightPx: 52,
-    buttonLabelFontSize: 19,
+    gapTitleToBodyPx: 74,
+    gapBodyToButtonPx: 48,
+    buttonWidthPx: 184,
+    buttonHeightPx: 58,
+    buttonLabelFontSize: 22,
   },
   // Smaller/tighter throughout — this variant only ever displays one
   // short, fixed title + a 3-line body, never the long room-intro copy
   // the default variant was originally sized for.
   compact: {
-    widthPx: 420,
-    heightPx: 300,
+    widthPx: 470,
+    heightPx: 380,
     paddingPx: 30,
-    titleFontSize: 28,
-    bodyFontSize: 19,
-    bodyLineSpacing: 8,
+    titleFontSize: 31,
+    bodyFontSize: 22,
+    bodyLineSpacing: 10,
     titleTopPaddingPx: 26,
     // gapTitleToBodyPx is measured title-TOP to body-TOP, not title-
     // bottom to body-top — at the old value of 22 (title's own rendered
     // height is ~32px), the body's top edge actually landed *above* the
-    // title's bottom edge, visually merging the two. 50 (title height +
-    // ~18px of real breathing room) gives a clear, deliberate gap below
-    // the title while leaving titleTopPaddingPx (so the title itself
-    // stays put) and bodyLineSpacing (the tight, compact gap between the
-    // body's own lines) untouched.
-    gapTitleToBodyPx: 50,
-    gapBodyToButtonPx: 24,
-    buttonWidthPx: 150,
-    buttonHeightPx: 46,
-    buttonLabelFontSize: 17,
+    // title's bottom edge, visually merging the two. 58 (title height +
+    // real breathing room) gives a clear, deliberate gap below the title
+    // while leaving titleTopPaddingPx (so the title itself stays put) and
+    // bodyLineSpacing (the tight, compact gap between the body's own
+    // lines) untouched.
+    gapTitleToBodyPx: 58,
+    gapBodyToButtonPx: 28,
+    buttonWidthPx: 164,
+    buttonHeightPx: 52,
+    buttonLabelFontSize: 19,
   },
 };
 

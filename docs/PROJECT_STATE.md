@@ -2697,13 +2697,18 @@ it (don't just append below it) whenever one of these systems changes.
   collected and retired once all three are placed — this is the line that
   used to float permanently above the Heart of the Temple (see
   `CrystalPlacementMode.ts` below) before it moved here to be opt-in like
-  every other hint. All four show in a small dismiss-on-click popup, and
-  clicking the button cycles through whichever are still pending, in a
-  popup sized/font-scaled up (from an earlier, reportedly-too-small pass)
-  for legibility on a laptop-sized window. Reads the shared registry via
-  `GameState.ts` for prerequisites/discovery; its only other coupling is
-  the imported `CrystalHolder.ts` layout constants above, no dependency
-  on `CentralHallScene`'s own internals.
+  every other hint. All four show in a small dismiss-on-click popup —
+  button (76px, 26px label) and popup (720px-capped panel, 34px message
+  text) both sized up a second time after continued real-device/laptop
+  feedback that the first pass was still too small; every other shared
+  popup in the game (`RoundIntroPopup.ts`, `FeedbackPopup.ts`, Room 3's
+  own inline feedback, and `CentralHallScene`'s two crystal popups) got
+  the same legibility pass in the same sprint, all sized generously rather
+  than just proportionally so wrapped multi-line copy has real safety
+  margin. Reads the shared registry via `GameState.ts` for prerequisites/
+  discovery; its only other coupling is the imported `CrystalHolder.ts`
+  layout constants above, no dependency on `CentralHallScene`'s own
+  internals.
 - **Left doorway (removed):** the original left-doorway hotspot
   (`Doorway.ts` instance at background-px 195,545) and its destination,
   `PuzzlePlaceholderScene.ts` (a single standalone order-of-operations
