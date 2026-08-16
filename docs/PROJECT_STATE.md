@@ -2798,6 +2798,24 @@ it (don't just append below it) whenever one of these systems changes.
 - **Exit:** the background's own painted archway (top-left), made
   interactive via `Doorway.ts`; unlocked only once the puzzle is
   complete. Return transition: short zoom + 400ms fade → `scene.start('CentralHallScene')`.
+- **Mobile fixes (from real-device testing):** each ring's 4 value labels
+  (fractions/decimals/percents) are children of that ring's own rotating
+  `Container` for radial positioning, but are now always counter-rotated
+  to the container's live angle (`setRingAngle()`/
+  `syncRingLabelRotation()`, called from every place the ring's angle is
+  ever set — drag, snap, shake, duplicate-vibration, next-round reroll,
+  final-settle flourish, instant restore-on-reentry) so the digits/symbols
+  always read upright, never sideways/upside-down as the ring spins. Also,
+  the floating "crystal code" panel above the rings — whose plain top edge
+  sits at bg-px Y~132 — was reported cut off at the top on a real short
+  phone-landscape screen (ENVELOP scale mode crops roughly the
+  top/bottom 190bg-px of the shared 1536×1024 space); in ENVELOP mode
+  specifically the panel now renders smaller and lower
+  (`ENVELOP_PANEL_SCALE`/`ENVELOP_PANEL_CENTER_OFFSET_Y_BG` in
+  `EquivalencePuzzle.ts`) so its title/frame clear the crop line with a
+  small buffer, while still leaving a small gap above the marker. Purely
+  visual — the rings/marker's own scale and hit-testing geometry are
+  untouched, and desktop/tablet FIT-mode layout is unaffected.
 
 ### Libra Room (`LibraRoomScene.ts`)
 

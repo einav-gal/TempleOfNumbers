@@ -1227,3 +1227,56 @@ rejected as feeling disconnected/fabricated).
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Pink Room Mobile Fixes: Upright Ring Labels + Code Panel Crop
+
+### Status
+
+Completed
+
+### Goal
+
+Fix two issues reported from real-device testing (a mobile screenshot of
+the Pink Room's equivalence puzzle): (1) the ring value labels
+(fractions/decimals/percents) appeared sideways/upside-down as their ring
+rotated, and (2) the floating "crystal code" panel above the rings was
+cropped at the top, its title not visible.
+
+### Completed
+
+- **`src/game/EquivalencePuzzle.ts` — upright ring labels:** each ring's 4
+  value-label `Text` objects are children of that ring's own rotating
+  `Container` (for radial positioning), so they were inheriting the
+  container's full rotation. Added a `labels` array to `RingRuntime`, and
+  two helpers — `setRingAngle()` (sets the container's angle and
+  counter-rotates the labels to match) and `syncRingLabelRotation()` (for
+  tweens that animate `ring.container.angle`/`ring.angle` directly, via
+  their own `onUpdate`). Replaced every one of the 8 call sites that
+  previously set a ring's angle directly: `layout()`, live drag
+  (`onPointerMove`), snap-to-position (both `onUpdate`/`onComplete`),
+  incorrect-answer shake, duplicate-answer vibration, the next-round
+  random reroll, the final-settle flourish tween, and the instant
+  restore-on-reentry pose. Labels now always read upright in world space,
+  regardless of the ring's own spin.
+- **`src/game/EquivalencePuzzle.ts` — code panel top-crop fix:** the
+  panel's plain top edge sits at bg-px Y~132 relative to the crystal
+  center — inside the roughly-190bg-px band that ENVELOP scale mode (short
+  phone-landscape screens, see `scaleMode.ts`) crops off the top/bottom of
+  the shared 1536×1024 space, matching the screenshot. Added
+  `ENVELOP_PANEL_SCALE` (0.55) and `ENVELOP_PANEL_CENTER_OFFSET_Y_BG`
+  (-310); `layout()` now checks `isEnvelopScaleMode()` and, only in that
+  mode, renders the panel (and its glow) smaller and lower — clearing the
+  crop line with a buffer while keeping a small gap above the marker's own
+  top edge. Purely visual (the panel has no interactive geometry of its
+  own); the rings/marker's real scale and hit-testing math, and the
+  desktop/tablet FIT-mode layout, are completely unaffected.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Reasoned through the exact bg-px numbers (crystal center, marker offset,
+  panel height/offset, ENVELOP's ~190bg-px crop) to confirm the fix
+  clears the crop line with margin; not yet re-verified on the reporter's
+  own physical device.

@@ -5,6 +5,7 @@ import FeedbackPopup from './FeedbackPopup';
 import { createRtlText } from './rtlText';
 import { setPinkRoomState, setCrystalCollected } from './GameState';
 import { FONT_FAMILY } from './textStyle';
+import { isEnvelopScaleMode } from './scaleMode';
 import type CrystalHolder from './CrystalHolder';
 import {
   EQUIVALENCE_GROUPS,
@@ -35,6 +36,8 @@ interface RingRuntime {
   radii: RingRadii;
   image: Phaser.GameObjects.Image;
   container: Phaser.GameObjects.Container;
+  /** The 4 value labels (fractions/decimals/percents) arranged around the ring — children of `container` for positioning, but always counter-rotated to stay upright regardless of the ring's own spin; see setRingAngle()/syncRingLabelRotation(). */
+  labels: Phaser.GameObjects.Text[];
   /** Current rotation in degrees; the authoritative "value" state — not necessarily snapped mid-drag. */
   angle: number;
   isDragging: boolean;
@@ -258,6 +261,19 @@ const REWARD_ICON_SIZE_PX = 34;
 const PANEL_CENTER_OFFSET_Y_BG = -345;
 const PANEL_WIDTH_BG = 460;
 const PANEL_HEIGHT_BG = 166;
+
+// ENVELOP mode (short phone-landscape screens, see scaleMode.ts) crops
+// roughly the top/bottom 190bg-px off this same 1536x1024 space — well
+// past this panel's normal top edge (bg-px Y~132), which is why the
+// title/frame were reported cut off on a real device. Only in that mode,
+// the panel gets its own smaller, lower pose: shrunk small enough, and
+// moved down close enough to the marker, to clear the crop line with a
+// little buffer while still leaving a small gap above the marker's own
+// top edge (baseY - MARKER_OFFSET_Y_BG). Purely visual (see
+// createCrystalCodePanel()'s "visual-only children" note) — never
+// touches the rings/marker's own scale or hit-testing geometry.
+const ENVELOP_PANEL_SCALE = 0.55;
+const ENVELOP_PANEL_CENTER_OFFSET_Y_BG = -310;
 // Moved down 20bg-px from the previous -68 (within the requested 18-30
 // range) — panel half-height is 83, so this now leaves ~35bg-px of
 // clearance above the title instead of ~15, comfortably clear of the
@@ -447,7 +463,8 @@ export default class EquivalencePuzzle {
     this.mechanismGlow?.setPosition(baseX, baseY).setDisplaySize(OUTER_RADII.outer * 2.3 * scale, OUTER_RADII.outer * 2.3 * scale);
 
     for (const ring of this.rings) {
-      ring.container.setPosition(baseX, baseY).setScale(scale).setAngle(ring.angle);
+      ring.container.setPosition(baseX, baseY).setScale(scale);
+      this.setRingAngle(ring, ring.angle);
     }
 
     const mechanismRadiusScreen = (OUTER_RADII.outer + RING_OUTER_TOLERANCE_BG) * scale;
@@ -458,11 +475,14 @@ export default class EquivalencePuzzle {
     const crystalRadiusScreen = CRYSTAL_HIT_RADIUS_BG * scale;
     this.crystalZone?.setPosition(baseX, baseY).setSize(crystalRadiusScreen * 2, crystalRadiusScreen * 2);
 
-    const panelCenterY = baseY + PANEL_CENTER_OFFSET_Y_BG * scale;
-    this.codePanelContainer?.setPosition(baseX, panelCenterY).setScale(scale);
+    const isEnvelop = isEnvelopScaleMode(this.scene);
+    const panelScale = isEnvelop ? scale * ENVELOP_PANEL_SCALE : scale;
+    const panelOffsetYBg = isEnvelop ? ENVELOP_PANEL_CENTER_OFFSET_Y_BG : PANEL_CENTER_OFFSET_Y_BG;
+    const panelCenterY = baseY + panelOffsetYBg * scale;
+    this.codePanelContainer?.setPosition(baseX, panelCenterY).setScale(panelScale);
     this.codePanelGlow
       ?.setPosition(baseX, panelCenterY)
-      .setDisplaySize(PANEL_WIDTH_BG * 1.3 * scale, PANEL_HEIGHT_BG * 1.4 * scale);
+      .setDisplaySize(PANEL_WIDTH_BG * 1.3 * panelScale, PANEL_HEIGHT_BG * 1.4 * panelScale);
 
     if (this.digitRevealText) {
       this.digitRevealText.setPosition(baseX, baseY).setFontSize(DIGIT_REVEAL_FONT_SIZE_BG * scale);
@@ -547,13 +567,19 @@ export default class EquivalencePuzzle {
     const container = this.scene.add.container(0, 0, [image]).setDepth(depth);
 
     const midRadius = (radii.inner + radii.outer) / 2;
+    const labels: Phaser.GameObjects.Text[] = [];
     for (let i = 0; i < order.length; i++) {
       const label = labelFor(kind, order[i]);
       const angleRad = Phaser.Math.DegToRad(i * SNAP_ANGLE_DEG);
       const x = Math.sin(angleRad) * midRadius;
       const y = -Math.cos(angleRad) * midRadius;
       // Ring values (fractions/decimals/percents) are numbers/math
-      // notation, not Hebrew words — left as plain LTR text.
+      // notation, not Hebrew words — left as plain LTR text. Positioned as
+      // a child of the rotating container (so it orbits with the ring),
+      // but its OWN angle is always kept counter-rotated to the
+      // container's current angle (see setRingAngle()/
+      // syncRingLabelRotation()) so it reads upright no matter how the
+      // ring itself is currently spun.
       const text = this.scene.add
         .text(x, y, label, {
           fontFamily: FONT_FAMILY,
@@ -562,6 +588,7 @@ export default class EquivalencePuzzle {
         })
         .setOrigin(0.5);
       container.add(text);
+      labels.push(text);
     }
 
     return {
@@ -571,10 +598,34 @@ export default class EquivalencePuzzle {
       radii,
       image,
       container,
+      labels,
       angle: 0,
       isDragging: false,
       dragLastPointerAngleDeg: 0,
     };
+  }
+
+  // Sets the ring container's angle AND keeps its value labels upright
+  // (world-space angle ~0) regardless of that rotation — the single place
+  // that should ever be used to set a ring's angle explicitly. For tweens
+  // that animate `ring.container.angle`/`ring.angle` directly (Phaser
+  // writes that property every frame without calling back into this
+  // class), use syncRingLabelRotation() in their own onUpdate instead.
+  private setRingAngle(ring: RingRuntime, angle: number): void {
+    ring.container.setAngle(angle);
+    this.syncRingLabelRotation(ring);
+  }
+
+  // Re-reads the container's CURRENT angle (whatever a running tween just
+  // set it to) and counter-rotates the labels to match — for tweens that
+  // target `ring.container.angle` directly (e.g. shakeRing()), where
+  // Phaser's own tween system writes the container's angle every frame
+  // with no hook back into this class otherwise.
+  private syncRingLabelRotation(ring: RingRuntime): void {
+    const angle = ring.container.angle;
+    for (const label of ring.labels) {
+      label.setAngle(-angle);
+    }
   }
 
   // One mechanism-wide invisible Zone (not three per-ring zones) —
@@ -773,7 +824,7 @@ export default class EquivalencePuzzle {
     const step = Phaser.Math.Angle.WrapDegrees(currentAngle - ring.dragLastPointerAngleDeg);
     ring.angle += step;
     ring.dragLastPointerAngleDeg = currentAngle;
-    ring.container.setAngle(ring.angle);
+    this.setRingAngle(ring, ring.angle);
   }
 
   private onPointerUp(): void {
@@ -804,12 +855,12 @@ export default class EquivalencePuzzle {
       angle: targetAngle,
       duration: SNAP_DURATION_MS,
       ease: Phaser.Math.Easing.Sine.Out,
-      onUpdate: () => ring.container.setAngle(ring.angle),
+      onUpdate: () => this.setRingAngle(ring, ring.angle),
       onComplete: () => {
         // Normalize into 0-360 so the number stays bounded over a long
         // session; equivalent angle, same visual result.
         ring.angle = Phaser.Math.Wrap(targetAngle, 0, 360);
-        ring.container.setAngle(ring.angle);
+        this.setRingAngle(ring, ring.angle);
         this.logSelectionDebug(ring);
         if (this.state === 'ALIGNING_RINGS') {
           this.setCrystalInteractive(true);
@@ -1276,7 +1327,8 @@ export default class EquivalencePuzzle {
       yoyo: true,
       repeat: SHAKE_REPEATS,
       ease: Phaser.Math.Easing.Sine.InOut,
-      onComplete: () => ring.container.setAngle(base),
+      onUpdate: () => this.syncRingLabelRotation(ring),
+      onComplete: () => this.setRingAngle(ring, base),
     });
   }
 
@@ -1302,8 +1354,9 @@ export default class EquivalencePuzzle {
       yoyo: true,
       repeat: SHAKE_REPEATS,
       ease: Phaser.Math.Easing.Sine.InOut,
+      onUpdate: () => this.syncRingLabelRotation(ring),
       onComplete: () => {
-        ring.container.setAngle(base);
+        this.setRingAngle(ring, base);
         ring.image.clearTint();
       },
     });
@@ -1356,7 +1409,7 @@ export default class EquivalencePuzzle {
     this.middleRing.angle = middleAngle;
     this.outerRing.angle = outerAngle;
     for (const ring of this.rings) {
-      ring.container.setAngle(ring.angle);
+      this.setRingAngle(ring, ring.angle);
     }
   }
 
@@ -1446,7 +1499,7 @@ export default class EquivalencePuzzle {
         angle: target,
         duration: FINAL_SETTLE_DURATION_MS,
         ease: Phaser.Math.Easing.Sine.InOut,
-        onUpdate: () => ring.container.setAngle(ring.angle),
+        onUpdate: () => this.setRingAngle(ring, ring.angle),
       });
     }
   }
@@ -1460,7 +1513,7 @@ export default class EquivalencePuzzle {
     }
     for (const ring of this.rings) {
       ring.angle = this.angleForGroup(ring.order, lastGroupId) + FINAL_SETTLE_EXTRA_DEG;
-      ring.container.setAngle(ring.angle);
+      this.setRingAngle(ring, ring.angle);
     }
   }
 
