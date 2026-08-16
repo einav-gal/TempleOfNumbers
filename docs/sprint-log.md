@@ -1594,3 +1594,74 @@ component, not just the hint popup touched in the previous sprint.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Intro Overlay Now Needs a Second Click to Dismiss
+
+### Status
+
+Completed
+
+### Goal
+
+Clicking "כניסה למקדש" both entered fullscreen and closed the intro
+message in the same click, so the message disappeared the instant the
+screen grew. It should instead stay up after the first click (which only
+enters fullscreen) — a second, genuine click is needed to dismiss it.
+
+### Completed
+
+- **`src/game/IntroOverlay.ts`:** added a `hasRequestedFullscreen` field.
+  The button's click handler is now `handleButtonClick()`: on the first
+  press, it calls `requestGameFullscreen()` (still synchronous within
+  that same click, so it still counts as a real user gesture) and returns
+  without touching the overlay at all; on every press after that, it
+  calls the existing `dismiss()` (fade-out + destroy), unchanged.
+
+### Out of Scope (respected)
+
+- `dismiss()` itself, the fade-out/torch-tween cleanup, and everything
+  else in this file — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Libra Room: Stone Locks in Place Immediately After the Drop
+
+### Status
+
+Completed
+
+### Goal
+
+Reported on both input methods (drag and click-to-place): right at the
+moment of the drop, the stone kept following the mouse cursor instead of
+staying fixed in place.
+
+### Completed
+
+- **`src/game/LibraPuzzle.ts`:** `acceptAnswer()` — the single place both
+  input methods converge on once a stone is accepted — now stops any
+  leftover hover/selection lift-tween on that exact stone and immediately
+  calls `stone.container.disableInteractive()`, before starting the tween
+  that settles it into the pan. Once accepted (correct or incorrect),
+  that stone can never again be dragged or click-selected, closing off
+  any path for it to keep tracking pointer movement after the drop.
+  `returnStoneToStart()` (used both by `acceptAnswer()`'s own defensive
+  guard and by the "dropped outside the pan, try again" case in
+  `onDragEnd()`) also now stops any leftover hover-tween first, for the
+  same reason, but deliberately leaves interactivity alone there, since
+  that stone needs to stay pickable for a retry.
+
+### Out of Scope (respected)
+
+- The validation/feedback/banner logic itself, and everything else in
+  this file — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

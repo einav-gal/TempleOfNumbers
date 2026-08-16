@@ -166,6 +166,11 @@ export default class IntroOverlay {
   private rightTorchTween?: Phaser.Tweens.Tween;
 
   private breathingStarted = false;
+  // The button's first click only requests fullscreen — it must fire
+  // synchronously from a real user gesture, so it can't be delayed to a
+  // later click — and deliberately does NOT dismiss the overlay yet; the
+  // message stays up until a genuine second click.
+  private hasRequestedFullscreen = false;
 
   /** Invoked once the fade-out finishes and the overlay is destroyed. */
   onDismissed?: () => void;
@@ -280,7 +285,7 @@ export default class IntroOverlay {
       this.buttonHovered = false;
       this.drawButton();
     });
-    this.buttonBg.on(Phaser.Input.Events.POINTER_DOWN, () => this.dismiss());
+    this.buttonBg.on(Phaser.Input.Events.POINTER_DOWN, () => this.handleButtonClick());
 
     this.refreshFontsWhenReady();
   }
@@ -625,17 +630,28 @@ export default class IntroOverlay {
     }
   }
 
+  // First click: requests fullscreen only — must be called synchronously
+  // from this same click so it still counts as a real user gesture — and
+  // leaves the overlay fully up, since "the message disappearing the
+  // instant the screen grows" is exactly the behavior this replaces.
+  // Second click: actually dismisses it (see dismiss()).
+  private handleButtonClick(): void {
+    if (!this.hasRequestedFullscreen) {
+      this.hasRequestedFullscreen = true;
+      // Best-effort, feature-detected, never blocks anything else here.
+      // Pinch-zoom no longer depends on staying in normal browser view
+      // (see MobilePinchZoom.ts — zooming is done entirely in-game, via
+      // the camera, so it works identically in and out of fullscreen).
+      requestGameFullscreen();
+      return;
+    }
+    this.dismiss();
+  }
+
   private dismiss(): void {
     if (!this.container) {
       return;
     }
-    // Best-effort, feature-detected, never blocks the dismiss itself —
-    // called synchronously from this same click so it still counts as a
-    // user gesture. Pinch-zoom no longer depends on staying in normal
-    // browser view (see MobilePinchZoom.ts — zooming is now done entirely
-    // in-game, via the camera, so it works identically in and out of
-    // fullscreen), so there's no longer a reason to hold off here.
-    requestGameFullscreen();
     this.buttonBg?.disableInteractive();
     for (const glow of this.glows) {
       glow.tween?.stop();

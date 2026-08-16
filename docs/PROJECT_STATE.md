@@ -2655,7 +2655,25 @@ it (don't just append below it) whenever one of these systems changes.
 
 - Background, animated Heart of the Temple (crystal + 3 astrolabe rings),
   atmosphere (dust, sparkles, fire shadows, oculus light), and the Hebrew
-  intro overlay are all complete and unchanged since their sprints above.
+  intro overlay are all complete and unchanged since their sprints above,
+  except the overlay's own "כניסה למקדש" button (`IntroOverlay.ts`), which
+  now takes two clicks rather than one: the first only calls
+  `requestGameFullscreen()` (still fired synchronously from that same
+  click, so it still counts as a real user gesture) and leaves the
+  overlay fully up; only the second click actually dismisses it
+  (`handleButtonClick()`/`hasRequestedFullscreen`) — previously a single
+  click did both at once, so the message vanished the instant the screen
+  grew into fullscreen.
+- **Libra Room stones locked on drop:** once a stone is accepted (correct
+  or incorrect, via either drag or click-to-place), `LibraPuzzle.ts`'s
+  `acceptAnswer()` now stops any leftover hover/selection tween and calls
+  `stone.container.disableInteractive()` immediately, so it can never
+  again be dragged or click-selected — hardening against a reported bug
+  where a placed stone kept following the mouse cursor after the drop
+  instead of settling in place. `returnStoneToStart()` (the "dropped
+  outside the pan, try again" path) also now stops any leftover
+  hover-tween first, but deliberately does *not* disable interactivity,
+  since that stone should stay pickable again.
 - **Entrance 1 (statue passage):** pot → hidden handle/lever → statue
   turns open → arched entrance reveals → two-phase walk-through camera
   transition → `PinkRoomScene`. State persisted via registry flag

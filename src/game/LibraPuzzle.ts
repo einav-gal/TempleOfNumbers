@@ -794,6 +794,12 @@ export default class LibraPuzzle {
   }
 
   private returnStoneToStart(stone: StoneRuntime): void {
+    // Stops any leftover hover/selection lift-tween on this exact stone
+    // first — without this, a still-running lift tween (targeting the
+    // container's own y) could keep fighting this return tween for
+    // whatever's left of its duration, reading as the stone not settling
+    // cleanly at its start position.
+    stone.hoverTween?.stop();
     stone.container.setDepth(this.baseDepth + 10);
     this.scene.tweens.add({
       targets: stone.container,
@@ -820,6 +826,15 @@ export default class LibraPuzzle {
 
     this.isChecking = true;
     this.setStonesDraggable(false);
+
+    // Stops any leftover hover/selection lift-tween on this exact stone
+    // (same reasoning as returnStoneToStart() above), then locks it
+    // completely — disableInteractive() so it can never again be dragged
+    // or click-selected, guaranteeing it settles at the pan and stays
+    // there untouched until destroyStones() eventually removes it. Never
+    // re-enabled: this stone is done regardless of correct/incorrect.
+    stone.hoverTween?.stop();
+    stone.container.disableInteractive();
 
     stone.container.setDepth(this.baseDepth + 10);
     this.scene.tweens.add({
