@@ -172,6 +172,8 @@ interface StoneRuntime {
   startBgX: number;
   startBgY: number;
   hovered: boolean;
+  /** True while this stone is the click-to-select target, awaiting a tap on the pan (mobile-friendly alternative to dragging) — see selectStoneForClick()/onTargetClicked(). */
+  selected: boolean;
   hoverTween?: Phaser.Tweens.Tween;
 }
 
@@ -186,7 +188,12 @@ interface BannerSlotRuntime {
  * The Libra Room's balance puzzle: a fixed sequence of exactly 5
  * order-of-operations questions (QUESTION_SEQUENCE), always asked in the
  * same order, all 5 required — no random draw, no substituting a
- * different question. Dragging a stone into the right pan validates it
+ * different question. An answer stone reaches the right pan either by
+ * dragging it there, or by tapping the stone (selects it — lift + glow)
+ * then tapping the pan itself (places it) — the mobile-friendly
+ * click-to-select-then-place alternative, same pattern
+ * CrystalPlacementMode.ts uses for the Central Hall's crystal slots. Both
+ * paths converge on the same acceptAnswer(), which validates it
  * immediately (no separate "check" step) — correct records the answer in
  * the top banner (flying in from the crystal, same technique as the Pink
  * Room's code-digit reveal) and loads the next question in sequence;
@@ -214,6 +221,12 @@ export default class LibraPuzzle {
   private targetOutline?: Phaser.GameObjects.Image;
   private targetPulseTween?: Phaser.Tweens.Tween;
   private rightPanDropZone?: Phaser.GameObjects.Zone;
+  // Shared Rectangle instance passed to rightPanDropZone.setInteractive() —
+  // Phaser keeps this exact object reference for hit-testing, so mutating
+  // its width/height in layout() keeps the clickable area in sync with the
+  // zone's own resized bounds (same technique CrystalPlacementMode.ts uses
+  // for its slot zones).
+  private rightPanHitRect = new Phaser.Geom.Rectangle(0, 0, 1, 1);
 
   private balanceLine?: Phaser.GameObjects.Graphics;
   private crystalGlow?: Phaser.GameObjects.Image;
@@ -235,6 +248,8 @@ export default class LibraPuzzle {
 
   private stones: StoneRuntime[] = [];
   private draggingStone?: StoneRuntime;
+  /** The stone currently picked via click-to-select, awaiting a tap on the pan — see selectStoneForClick()/onTargetClicked(). */
+  private clickSelectedStone?: StoneRuntime;
 
   // ---- explicit puzzle state -------------------------------------------
   private correctAnswerCount = 0;
@@ -294,9 +309,18 @@ export default class LibraPuzzle {
       .setTint(TARGET_PINK_TINT)
       .setDepth(depth + 2);
 
-    // Geometry-only reference for manual overlap detection (see
-    // onDragEnd()) — not registered as a Phaser dropZone, never visible.
+    // Used two ways: a getBounds() reference for manual overlap detection
+    // when DRAGGING a stone in (see onDragEnd()/isStoneOverRightPan() —
+    // that path never depends on Phaser's own dropZone system), and — as
+    // of this task — a real interactive zone so a stone already picked via
+    // click-to-select can be placed by tapping the pan instead of
+    // dragging (see onTargetClicked()). Never visible either way.
     this.rightPanDropZone = this.scene.add.zone(0, 0, 1, 1);
+    this.rightPanDropZone.setInteractive(this.rightPanHitRect, Phaser.Geom.Rectangle.Contains);
+    if (this.rightPanDropZone.input) {
+      this.rightPanDropZone.input.cursor = 'pointer';
+    }
+    this.rightPanDropZone.on(Phaser.Input.Events.POINTER_DOWN, () => this.onTargetClicked());
 
     this.balanceLine = this.scene.add.graphics().setDepth(depth + 1);
 
@@ -389,6 +413,8 @@ export default class LibraPuzzle {
     this.rightPanDropZone
       ?.setPosition(toScreenX(RIGHT_PAN_X), toScreenY(RIGHT_PAN_Y))
       .setSize(RIGHT_PAN_ZONE_WIDTH_BG * scale, RIGHT_PAN_ZONE_HEIGHT_BG * scale);
+    this.rightPanHitRect.width = RIGHT_PAN_ZONE_WIDTH_BG * scale;
+    this.rightPanHitRect.height = RIGHT_PAN_ZONE_HEIGHT_BG * scale;
 
     this.crystalGlow
       ?.setPosition(toScreenX(CRYSTAL_X), toScreenY(CRYSTAL_Y))
@@ -552,6 +578,7 @@ export default class LibraPuzzle {
       startBgX: bgX,
       startBgY: bgY,
       hovered: false,
+      selected: false,
     };
 
     const hitRadius = (STONE_RADIUS_BG + STONE_HIT_PADDING_BG) * this.scaleFactor;
@@ -561,6 +588,7 @@ export default class LibraPuzzle {
     }
     container.on(Phaser.Input.Events.POINTER_OVER, () => this.setStoneHovered(stone, true));
     container.on(Phaser.Input.Events.POINTER_OUT, () => this.setStoneHovered(stone, false));
+    container.on(Phaser.Input.Events.POINTER_DOWN, () => this.onStonePointerDown(stone));
     this.scene.input.setDraggable(container, true);
 
     this.redrawStone(stone);
@@ -592,18 +620,32 @@ export default class LibraPuzzle {
       return;
     }
     stone.hovered = hovered;
+    this.applyStoneLiftAndGlow(stone);
+  }
+
+  // Combines hover and click-selection into the same lift/glow tween
+  // (never two competing tweens on the same properties) — selection wins
+  // on glow strength when both happen to be true (e.g. a selected stone
+  // still under the mouse), and either one alone is enough to lift it.
+  // Tweens to an explicit rest/lift Y rather than "current y" so a stone
+  // reliably settles back down on hover-out even after a completed
+  // hover-in tween (the previous hover-only version could otherwise read
+  // its own already-lifted position back as the "deselect" target).
+  private applyStoneLiftAndGlow(stone: StoneRuntime): void {
     stone.hoverTween?.stop();
     const liftPx = STONE_HOVER_LIFT_BG * this.scaleFactor;
-    const atStart = stone !== this.selectedStone;
+    const atStart = stone !== this.selectedStone; // not mid-flight to the pan
+    const restY = this.toScreenY(stone.startBgY);
+    const lifted = atStart && (stone.hovered || stone.selected);
     stone.hoverTween = this.scene.tweens.add({
       targets: stone.container,
-      y: hovered && atStart ? this.toScreenY(stone.startBgY) - liftPx : stone.container.y,
+      y: lifted ? restY - liftPx : restY,
       duration: STONE_HOVER_TWEEN_MS,
       ease: Phaser.Math.Easing.Sine.Out,
     });
     this.scene.tweens.add({
       targets: stone.glow,
-      alpha: hovered ? 0.5 : 0,
+      alpha: stone.selected ? 0.8 : stone.hovered ? 0.5 : 0,
       duration: STONE_HOVER_TWEEN_MS,
       ease: Phaser.Math.Easing.Sine.Out,
     });
@@ -626,6 +668,57 @@ export default class LibraPuzzle {
     }
     this.stones = [];
     this.draggingStone = undefined;
+    this.clickSelectedStone = undefined;
+  }
+
+  // ---- click-to-select-then-place (mobile-friendly alternative to drag) --
+
+  // Tapping a stone selects it (lifted + strengthened glow, same visual
+  // language as hover); tapping the same stone again deselects it; tapping
+  // a different stone switches the selection. Placing it is a separate
+  // tap on the pan itself — see onTargetClicked().
+  private onStonePointerDown(stone: StoneRuntime): void {
+    if (this.isChecking || this.isCompleted || !this.currentQuestion) {
+      return;
+    }
+    if (this.clickSelectedStone === stone) {
+      this.deselectClickedStone();
+      return;
+    }
+    this.deselectClickedStone();
+    this.clickSelectedStone = stone;
+    stone.selected = true;
+    this.applyStoneLiftAndGlow(stone);
+  }
+
+  private deselectClickedStone(): void {
+    if (!this.clickSelectedStone) {
+      return;
+    }
+    const previous = this.clickSelectedStone;
+    this.clickSelectedStone = undefined;
+    previous.selected = false;
+    this.applyStoneLiftAndGlow(previous);
+  }
+
+  // Tapping the pan with a stone selected places it exactly like a
+  // completed drag — reuses acceptAnswer() itself, so validation/feedback/
+  // banner behave identically regardless of which input method was used.
+  // A tap with nothing selected is an explicit no-op. Clears the selection
+  // state directly (rather than via deselectClickedStone()'s own tween)
+  // and stops the lift tween outright, since acceptAnswer() is about to
+  // animate this same stone's position itself — no point starting a
+  // competing "settle back down" tween a frame before that.
+  private onTargetClicked(): void {
+    if (!this.clickSelectedStone) {
+      return;
+    }
+    const stone = this.clickSelectedStone;
+    this.clickSelectedStone = undefined;
+    stone.selected = false;
+    stone.hoverTween?.stop();
+    stone.glow.setAlpha(0);
+    this.acceptAnswer(stone);
   }
 
   // ---- drag/drop (selection only — checking is a separate, explicit crystal click) --------
@@ -647,6 +740,9 @@ export default class LibraPuzzle {
   private onDragStart(gameObject: Phaser.GameObjects.GameObject): void {
     const stone = this.findStone(gameObject);
     if (stone && !this.isChecking && !this.isCompleted && this.currentQuestion) {
+      // A real drag always takes precedence over a pending click-selection
+      // — mirrors CrystalPlacementMode.ts's identical dual-mode gems.
+      this.deselectClickedStone();
       this.startStoneDrag(stone);
     }
   }

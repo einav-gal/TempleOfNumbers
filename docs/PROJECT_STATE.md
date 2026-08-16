@@ -2836,13 +2836,18 @@ it (don't just append below it) whenever one of these systems changes.
   on a giant crystal balance scale) — no procedural backdrop.
 - **Puzzle (`LibraPuzzle.ts`):** a fixed, ordered sequence of exactly 5
   order-of-operations questions (`QUESTION_SEQUENCE`; all 5 required, no
-  random draw) — the player drags stones onto the scale; each drop is
-  validated immediately (no separate confirm click, unlike the Pink
-  Room's ring-then-check flow). A wrong answer retries the *same*
-  question rather than skipping to a different one. On completion, plays
-  a reward sequence and flies a reward crystal into the `CrystalHolder`'s
-  **red** slot, sets the room's `completed` state in the registry, and
-  unlocks the exit.
+  random draw) — an answer stone reaches the right pan either by dragging
+  it there, or by tapping the stone (select — lift + strengthened glow)
+  then tapping the pan itself to place it, a mobile-friendly
+  click-to-select-then-place alternative added alongside the original
+  drag-only interaction (same pattern `CrystalPlacementMode.ts` uses for
+  the Central Hall's crystal slots; both input paths converge on the same
+  `acceptAnswer()`). Each drop/placement is validated immediately (no
+  separate confirm click, unlike the Pink Room's ring-then-check flow). A
+  wrong answer retries the *same* question rather than skipping to a
+  different one. On completion, plays a reward sequence and flies a
+  reward crystal into the `CrystalHolder`'s **red** slot, sets the room's
+  `completed` state in the registry, and unlocks the exit.
 - **Exit:** reuses the background's own painted archway + stairway (right
   side of frame) via `Doorway.ts`, same technique as the Pink Room. Once
   unlocked, the doorway also gets a clearly-visible animated "attention"
@@ -2865,9 +2870,15 @@ it (don't just append below it) whenever one of these systems changes.
   repeats, random lit-cell subsets, shuffled on-screen answer-card order,
   and vertically-rendered fractions (numerator/line/denominator, never a
   single-line "6/8" string). Same 3-correct-answers/code-digit-reveal
-  pattern as the Pink Room/Libra Room puzzles; on completion flies a
-  reward crystal into the `CrystalHolder`'s **green** slot (the
-  previously-reserved slot), completing the crystal-collection system.
+  pattern as the Pink Room/Libra Room puzzles; the 3rd correct card shows
+  a "code complete" toast ("כל הכבוד! הקוד הושלם") *before* the reward
+  crystal starts flying, then — once it actually arrives at the
+  `CrystalHolder`'s **green** slot (the previously-reserved slot) —
+  `finalizeReward()` shows a second, distinct "room complete" message
+  ("השלמתם את חידות עליית הגג!") via the same map-anchored feedback
+  overlay (`showAnswerFeedback('roomComplete', …)`), matching the
+  two-stage "code complete, then room complete" shape `LibraPuzzle.ts`
+  already had. This completes the crystal-collection system.
 - **Room's own crystal:** a large decorative `green-crystal.png` to the
   right of the map (not the `CrystalHolder` UI), on a procedural stone
   pedestal, with idle hover/scale-breathe animation stopped the instant

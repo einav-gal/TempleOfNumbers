@@ -199,9 +199,16 @@ const FEEDBACK_TEXT_CORRECT = 'נכון!';
 const FEEDBACK_TEXT_WRONG_TITLE = 'לא נכון';
 const FEEDBACK_TEXT_WRONG_SUB = 'עוברים לשאלה הבאה';
 const FEEDBACK_TEXT_FINAL = 'כל הכבוד! הקוד הושלם';
+// Shown once the reward crystal has actually finished flying into the
+// shared CrystalHolder (see finalizeReward()) — distinct from, and later
+// than, FEEDBACK_TEXT_FINAL above (which fires right on the 3rd correct
+// card, before the crystal even starts its flight). Same two-stage
+// "code complete, then room complete" shape LibraPuzzle.ts uses.
+const FEEDBACK_TEXT_ROOM_COMPLETE = 'השלמתם את חידות עליית הגג!';
 
 const ANSWER_FEEDBACK_HOLD_MS = 900;
 const FINAL_FEEDBACK_HOLD_MS = 2200;
+const ROOM_COMPLETE_FEEDBACK_HOLD_MS = 2200;
 
 const SHAKE_OFFSET_PX = 6;
 const SHAKE_TWEEN_MS = 70;
@@ -811,7 +818,7 @@ export default class MapFractionPuzzle {
     container.add([this.feedbackGlow, this.feedbackFrame, this.feedbackIconText, this.feedbackTitleText, this.feedbackSubText]);
   }
 
-  private showAnswerFeedback(kind: 'correct' | 'wrong' | 'final', onHidden: () => void): void {
+  private showAnswerFeedback(kind: 'correct' | 'wrong' | 'final' | 'roomComplete', onHidden: () => void): void {
     if (
       !this.feedbackGlow ||
       !this.feedbackFrame ||
@@ -828,9 +835,16 @@ export default class MapFractionPuzzle {
 
     const isWrong = kind === 'wrong';
     const color = isWrong ? WRONG_COLOR : CORRECT_COLOR;
-    const title = kind === 'wrong' ? FEEDBACK_TEXT_WRONG_TITLE : kind === 'final' ? FEEDBACK_TEXT_FINAL : FEEDBACK_TEXT_CORRECT;
+    const title =
+      kind === 'wrong'
+        ? FEEDBACK_TEXT_WRONG_TITLE
+        : kind === 'final'
+          ? FEEDBACK_TEXT_FINAL
+          : kind === 'roomComplete'
+            ? FEEDBACK_TEXT_ROOM_COMPLETE
+            : FEEDBACK_TEXT_CORRECT;
     const sub = isWrong ? FEEDBACK_TEXT_WRONG_SUB : '';
-    const holdMs = kind === 'final' ? FINAL_FEEDBACK_HOLD_MS : ANSWER_FEEDBACK_HOLD_MS;
+    const holdMs = kind === 'final' ? FINAL_FEEDBACK_HOLD_MS : kind === 'roomComplete' ? ROOM_COMPLETE_FEEDBACK_HOLD_MS : ANSWER_FEEDBACK_HOLD_MS;
 
     const brightColor = isWrong ? BRIGHT_WRONG_CSS : BRIGHT_CORRECT_CSS;
     this.feedbackGlow.setTint(color);
@@ -1158,7 +1172,13 @@ export default class MapFractionPuzzle {
     this.rewardSymbol = undefined;
     setCrystalCollected(this.scene.registry, 'green');
     this.config.crystalHolder?.revealCollected('green');
-    this.config.onSolved?.();
+    // A distinct "room complete" message, shown only now that the reward
+    // crystal has actually reached the pouch — separate from, and later
+    // than, the "code complete" toast on the 3rd correct card (see
+    // handleCardAnswer()'s 'final' feedback, which fires before the
+    // crystal even starts flying). Same two-stage shape LibraPuzzle.ts
+    // uses for its own room-complete feedback.
+    this.showAnswerFeedback('roomComplete', () => this.config.onSolved?.());
   }
 
   // TEMPORARY prototype art: procedural canvas textures for the cell

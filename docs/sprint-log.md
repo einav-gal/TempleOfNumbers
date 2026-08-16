@@ -1355,3 +1355,98 @@ same hint system instead of leaving it as a fixture on screen.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Libra Room: Click-to-Select-Then-Place as a Drag Alternative
+
+### Status
+
+Completed
+
+### Goal
+
+The Libra Room's balance puzzle (`LibraPuzzle.ts`) only supported dragging
+an answer stone into the right pan. Add a click & drop alternative —
+tap the stone, then tap the pan to place it — the same mobile-friendly
+pattern `CrystalPlacementMode.ts` already uses for the Central Hall's
+crystal slots.
+
+### Completed
+
+- **`src/game/LibraPuzzle.ts`:** added a `selected` field to
+  `StoneRuntime`, a `clickSelectedStone` tracking field, and
+  `onStonePointerDown()`/`deselectClickedStone()` (tap a stone to select
+  it — lift + strengthened glow, tap again to deselect, tap a different
+  stone to switch). Made the existing `rightPanDropZone` (previously
+  geometry-only, used solely for drag-overlap bounds checking) genuinely
+  interactive (`setInteractive()` + pointer cursor, hit-rect kept in sync
+  in `layout()` the same way `CrystalPlacementMode.ts`'s slot zones do);
+  tapping it with a stone selected calls `onTargetClicked()`, which clears
+  the selection and calls the exact same `acceptAnswer()` a completed drag
+  uses — so validation/feedback/banner behave identically regardless of
+  input method. `onDragStart()` now deselects any pending click-selection
+  first, mirroring `CrystalPlacementMode.ts`'s identical dual-mode gems.
+  Unified the hover-lift/glow tween (`setStoneHovered`) and the new
+  selection state into one `applyStoneLiftAndGlow()` so the two visual
+  states never fight over the same tweened properties, and — since a
+  shared helper needed a single correct target either way — the
+  hover-out tween now settles to an explicit rest Y instead of "whatever
+  y the container currently has" (the previous version could leave a
+  stone stuck lifted after a sustained hover, since by then its `y` had
+  already reached the lifted value).
+
+### Out of Scope (respected)
+
+- The 5-question sequence, validation logic, banner, reward-crystal
+  flight, and everything else in this file — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Room 3 (Green Room): Room-Complete Message After the Reward Crystal Arrives
+
+### Status
+
+Completed
+
+### Goal
+
+Room 3's map puzzle (`MapFractionPuzzle.ts`) already showed a "code
+complete" toast ("כל הכבוד! הקוד הושלם") the instant the 3rd card was
+answered correctly, but nothing afterward — unlike the Libra Room, which
+shows a distinct "room complete" message only once its reward crystal has
+actually finished flying into the shared `CrystalHolder`. Add the
+equivalent second-stage message here too.
+
+### Completed
+
+- **`src/game/MapFractionPuzzle.ts`:** `showAnswerFeedback()`'s `kind`
+  union gained a fourth case, `'roomComplete'`, with its own text
+  (`FEEDBACK_TEXT_ROOM_COMPLETE` — "השלמתם את חידות עליית הגג!") and hold
+  duration (`ROOM_COMPLETE_FEEDBACK_HOLD_MS`), reusing the same
+  map-anchored feedback overlay every other outcome already uses (no new
+  popup class). `finalizeReward()` — previously just marking the crystal
+  collected and calling `onSolved?.()` silently — now shows this message
+  first and calls `onSolved?.()` only once it fades, matching
+  `LibraPuzzle.ts`'s own "reward arrives, then room-complete message,
+  then continue" sequencing.
+
+### Out of Scope (respected)
+
+- The existing "code complete" toast (`FEEDBACK_TEXT_FINAL`, shown before
+  the reward crystal starts flying) — untouched, still fires exactly as
+  before.
+- The question bank, card validation, code-digit reveal, and everything
+  else in this file — untouched.
+- Room 3's exit doorway itself is unconditionally active from room entry
+  (never gated on puzzle completion, unlike the Pink/Libra Rooms), so this
+  message is purely a completion confirmation — it does not unlock
+  anything.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
