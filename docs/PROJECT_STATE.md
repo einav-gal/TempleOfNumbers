@@ -2678,8 +2678,13 @@ it (don't just append below it) whenever one of these systems changes.
 - Persistent `CrystalHolder` UI (see below) is mounted here too, so
   collected crystals stay visible while in the hall.
 - **Hint system (`HintSystem.ts`):** a small, screen-fixed "רמז" (hint)
-  button in the bottom-left corner, hidden whenever nothing is currently
-  pending — visible only while at least one of four candidates is both
+  button in the top-left corner, directly below the `CrystalHolder` pouch
+  (same left margin — imported from `CrystalHolder.ts`'s own exported
+  `HOLDER_MARGIN_X_PX`/`HOLDER_MARGIN_Y_PX`/`HOLDER_HEIGHT_PX`, not a
+  second copy of those numbers — so the two read as one grouped cluster;
+  moved here from an earlier bottom-left position after real-device/
+  laptop feedback). Hidden whenever nothing is currently pending — visible
+  only while at least one of four candidates is both
   *available* (e.g. the floor tile only counts once the Pink Room shard is
   held) and *not yet discovered*/not yet resolved. Three are the hall's
   discovery targets (pot/lever/statue passage, floor seal, wall wheel),
@@ -2693,10 +2698,12 @@ it (don't just append below it) whenever one of these systems changes.
   used to float permanently above the Heart of the Temple (see
   `CrystalPlacementMode.ts` below) before it moved here to be opt-in like
   every other hint. All four show in a small dismiss-on-click popup, and
-  clicking the button cycles through whichever are still pending.
-  Self-contained: only reads the shared registry via `GameState.ts` for
-  prerequisites/discovery, no dependency on `CentralHallScene`'s own
-  internals.
+  clicking the button cycles through whichever are still pending, in a
+  popup sized/font-scaled up (from an earlier, reportedly-too-small pass)
+  for legibility on a laptop-sized window. Reads the shared registry via
+  `GameState.ts` for prerequisites/discovery; its only other coupling is
+  the imported `CrystalHolder.ts` layout constants above, no dependency
+  on `CentralHallScene`'s own internals.
 - **Left doorway (removed):** the original left-doorway hotspot
   (`Doorway.ts` instance at background-px 195,545) and its destination,
   `PuzzlePlaceholderScene.ts` (a single standalone order-of-operations

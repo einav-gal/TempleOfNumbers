@@ -8,7 +8,8 @@ import {
   areAllCrystalsCollected,
   areAllCrystalsPlaced,
 } from './GameState';
-import { isEnvelopScaleMode, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
+import { HOLDER_MARGIN_X_PX, HOLDER_MARGIN_Y_PX, HOLDER_HEIGHT_PX } from './CrystalHolder';
 
 interface HintDefinition {
   id: string;
@@ -65,13 +66,26 @@ const HINTS: HintDefinition[] = [
 ];
 
 const BUTTON_SIZE_PX = 56;
-const BUTTON_MARGIN_PX = 18;
+// Gap kept between the CrystalHolder pouch's bottom edge and this
+// button's top edge, so the two read as one grouped cluster in the
+// top-left corner rather than accidentally touching.
+const BUTTON_GAP_BELOW_HOLDER_PX = 12;
 const BUTTON_DEPTH = 80;
 const POPUP_DEPTH = 150;
 const TOGGLE_DEBOUNCE_MS = 300;
 const VISIBILITY_POLL_MS = 1000;
 const BUTTON_LABEL = 'רמז';
 const CLOSE_HINT_TEXT = '— לחצו לסגירה —';
+
+// Bumped up from an earlier 560/200/22/13 — reported hard to read on a
+// laptop-sized window (the design canvas is fixed at 1536x1024 and scales
+// uniformly to fit any real viewport, so a modest window renders every
+// design-px measurement proportionally smaller; these are simply sized
+// more generously to stay legible at that end of the range too).
+const POPUP_PANEL_WIDTH_MAX_PX = 640;
+const POPUP_PANEL_HEIGHT_PX = 230;
+const POPUP_TEXT_FONT_PX = 28;
+const POPUP_CLOSE_HINT_FONT_PX = 16;
 
 /**
  * A small, always-in-the-corner "hint" button for Central Hall's three
@@ -84,10 +98,12 @@ const CLOSE_HINT_TEXT = '— לחצו לסגירה —';
  * never a literal instruction, and never anything math-related (math
  * belongs inside each room's own puzzle, not in a "where do I click" hint).
  *
- * Self-contained: reads only the shared registry (GameState.ts) for
- * prerequisites/discovery, and owns its own small popup rather than
- * reusing CentralHallScene's crystal-popup machinery, so it has no
- * dependency on that scene's internals.
+ * Reads only the shared registry (GameState.ts) for prerequisites/
+ * discovery, and owns its own small popup rather than reusing
+ * CentralHallScene's crystal-popup machinery — its only other coupling is
+ * a few imported layout constants from CrystalHolder.ts (see layout()),
+ * so its button positions itself directly beneath that pouch. Otherwise
+ * it has no dependency on that scene's internals.
  */
 export default class HintSystem {
   private scene: Phaser.Scene;
@@ -141,22 +157,27 @@ export default class HintSystem {
   }
 
   /**
-   * Screen-fixed bottom-left corner; safe to call anytime (e.g. on every
-   * resize) — reads current scale directly, no args needed. On short
-   * phone-landscape screens (ENVELOP scale mode) the fixed 1536x1024
-   * design canvas is cropped along its bottom edge, so a plain
-   * `height - margin` position would fall inside the cropped-off region —
-   * pulled up by the same shared safe margin `CrystalHolder.ts`/
-   * `Room3Scene.ts`/`IntroOverlay.ts` already use in that case.
+   * Screen-fixed top-left corner, directly below the CrystalHolder pouch
+   * (same left margin, so the two read as one grouped cluster rather than
+   * two unrelated corner widgets) — safe to call anytime (e.g. on every
+   * resize), reads current scale directly, no args needed. Reuses
+   * CrystalHolder's own exported margin/size constants rather than a
+   * second, driftable copy of those numbers. On short phone-landscape
+   * screens (ENVELOP scale mode) the fixed 1536x1024 design canvas is
+   * cropped along its top edge, so a plain fixed margin would fall inside
+   * the cropped-off region — CrystalHolder itself already substitutes
+   * `ENVELOP_TOP_SAFE_MARGIN_PX` for its own top margin in that case, and
+   * this button's position is derived from that same (possibly
+   * substituted) value, so it stays correctly anchored just below the
+   * holder in both modes without needing its own separate branch.
    */
   layout(): void {
     const width = this.scene.scale.width;
     const height = this.scene.scale.height;
-    const bottomMargin = isEnvelopScaleMode(this.scene)
-      ? ENVELOP_BOTTOM_SAFE_MARGIN_PX
-      : BUTTON_MARGIN_PX + BUTTON_SIZE_PX / 2;
 
-    this.buttonContainer?.setPosition(BUTTON_MARGIN_PX + BUTTON_SIZE_PX / 2, height - bottomMargin);
+    const holderTopMargin = isEnvelopScaleMode(this.scene) ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
+    const buttonY = holderTopMargin + HOLDER_HEIGHT_PX + BUTTON_GAP_BELOW_HOLDER_PX + BUTTON_SIZE_PX / 2;
+    this.buttonContainer?.setPosition(HOLDER_MARGIN_X_PX + BUTTON_SIZE_PX / 2, buttonY);
 
     if (this.popupContainer) {
       this.popupContainer.setPosition(width / 2, height / 2);
@@ -220,21 +241,21 @@ export default class HintSystem {
 
     const overlay = this.scene.add.rectangle(-width / 2, -height / 2, width, height, 0x000000, 0.55).setOrigin(0, 0);
 
-    const panelWidth = Math.min(width * 0.8, 560);
-    const panelHeight = 200;
+    const panelWidth = Math.min(width * 0.85, POPUP_PANEL_WIDTH_MAX_PX);
+    const panelHeight = POPUP_PANEL_HEIGHT_PX;
     const backdrop = this.scene.add
       .rectangle(0, 0, panelWidth, panelHeight, 0x241f19, 0.96)
       .setStrokeStyle(2, 0xd6b270, 0.7);
 
-    const label = createRtlText(this.scene, 0, -10, text, {
-      fontSize: '22px',
+    const label = createRtlText(this.scene, 0, -14, text, {
+      fontSize: `${POPUP_TEXT_FONT_PX}px`,
       color: '#f2e9d8',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
     }).setOrigin(0.5);
 
-    const closeHint = createRtlText(this.scene, 0, panelHeight / 2 - 30, CLOSE_HINT_TEXT, {
-      fontSize: '13px',
+    const closeHint = createRtlText(this.scene, 0, panelHeight / 2 - 32, CLOSE_HINT_TEXT, {
+      fontSize: `${POPUP_CLOSE_HINT_FONT_PX}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
 

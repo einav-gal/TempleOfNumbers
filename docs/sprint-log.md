@@ -1450,3 +1450,47 @@ equivalent second-stage message here too.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Hint Button Moved to Top-Left, Popup Made More Legible
+
+### Status
+
+Completed
+
+### Goal
+
+Real-laptop feedback: the hint popup's text looked too small to read
+comfortably, and the "רמז" button itself (bottom-left) should instead sit
+in the top-left corner, next to the crystal pouch bar.
+
+### Completed
+
+- **`src/game/CrystalHolder.ts`:** exported its `HOLDER_WIDTH_PX`/
+  `HOLDER_HEIGHT_PX`/`HOLDER_MARGIN_X_PX`/`HOLDER_MARGIN_Y_PX` constants
+  (previously module-private) so another file can anchor to this pouch's
+  real position/size without a second, driftable copy of those numbers.
+- **`src/game/HintSystem.ts`:** the button now sits directly below the
+  `CrystalHolder` pouch — same left margin (`HOLDER_MARGIN_X_PX`), Y
+  computed as the holder's own top margin (already ENVELOP-aware) plus
+  its height plus a small gap (`BUTTON_GAP_BELOW_HOLDER_PX`), so the two
+  read as one grouped top-left cluster in both FIT and ENVELOP scale
+  modes. Bumped the hint popup's panel width (560→640 capped,
+  0.8→0.85 of viewport width), height (200→230), message font
+  (22px→28px), and close-hint font (13px→16px) for legibility on a
+  modest laptop-window render — the design canvas is fixed at 1536×1024
+  and scales uniformly to any real viewport, so a smaller browser window
+  renders every design-px measurement proportionally smaller than a
+  maximized one.
+
+### Out of Scope (respected)
+
+- The hint content/gating logic (`HINTS`, tier1/tier2, availability/
+  discovery) — untouched.
+- `CrystalHolder.ts`'s own rendering/behavior — only 4 already-existing
+  constants gained the `export` keyword, nothing else changed there.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

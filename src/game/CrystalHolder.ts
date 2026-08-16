@@ -10,10 +10,13 @@ import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
 // margin would fall completely outside the visible area there; the
 // larger ENVELOP_TOP_SAFE_MARGIN_PX is used for the Y margin only in
 // that specific case (desktop/tablet FIT layout is untouched).
-const HOLDER_WIDTH_PX = 186;
-const HOLDER_HEIGHT_PX = 70;
-const HOLDER_MARGIN_X_PX = 18;
-const HOLDER_MARGIN_Y_PX = 18;
+// Exported so other screen-fixed UI (e.g. HintSystem.ts's hint button)
+// can anchor itself directly relative to this holder without duplicating
+// these numbers as a second, driftable copy.
+export const HOLDER_WIDTH_PX = 186;
+export const HOLDER_HEIGHT_PX = 70;
+export const HOLDER_MARGIN_X_PX = 18;
+export const HOLDER_MARGIN_Y_PX = 18;
 
 const SLOT_SIZE_PX = 40;
 const SLOT_SPACING_PX = 54;
