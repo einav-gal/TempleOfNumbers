@@ -27,7 +27,6 @@ import {
   isWallWheelOpen,
   setWallWheelOpen,
 } from '../game/GameState';
-import { FONT_FAMILY } from '../game/textStyle';
 import { createRtlText } from '../game/rtlText';
 import handleUrl from '../../assets/images/central-hall/handle/handle.png';
 // Photoshop-matched statue variant, hand-graded to match the background's
@@ -129,7 +128,7 @@ const STAIR_ZOOM_MAX = 6;
 const STAIR_CROSSFADE_MS = 120;
 const STAIR_CROSSFADE_PEAK_ALPHA = 0.55;
 
-const POPUP_TEXT = 'The Heart of the Temple is dormant.';
+const POPUP_TEXT = 'לב המקדש רדום.';
 // Shown automatically once the crystal shatters (see
 // heart.onMechanismShattered wiring in create()) — the game's actual
 // "you won" message. Nothing further (credits, a real ending scene,
@@ -538,24 +537,18 @@ export default class CentralHallScene extends Phaser.Scene {
     const panelHeight = 190;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
-    const message = this.add
-      .text(0, -12, POPUP_TEXT, {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Math.max(18, Math.min(26, width * 0.02))}px`,
-        color: '#d9cfae',
-        align: 'center',
-        wordWrap: { width: panelWidth - 80 },
-      })
-      .setOrigin(0.5);
+    const message = createRtlText(this, 0, -12, POPUP_TEXT, {
+      fontSize: `${Math.max(18, Math.min(26, width * 0.02))}px`,
+      color: '#d9cfae',
+      align: 'center',
+      wordWrap: { width: panelWidth - 80 },
+    }).setOrigin(0.5);
     this.popup.add(message);
 
-    const hint = this.add
-      .text(0, panelHeight / 2 - 34, '— click to close —', {
-        fontFamily: FONT_FAMILY,
-        fontSize: '13px',
-        color: '#8a8068',
-      })
-      .setOrigin(0.5);
+    const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
+      fontSize: '13px',
+      color: '#8a8068',
+    }).setOrigin(0.5);
     this.popup.add(hint);
 
     this.popup.setAlpha(0);
@@ -572,8 +565,8 @@ export default class CentralHallScene extends Phaser.Scene {
    * lock, fade-in), but with its own Hebrew RTL "you won" message — fires
    * automatically from heart.onMechanismShattered (see create()), never
    * from a click. Kept as its own method rather than parameterizing
-   * openPopup() itself, so the existing (English, plain Phaser Text,
-   * untouched) dormant-crystal popup can't be affected by this addition.
+   * openPopup() itself, so the dormant-crystal popup can't be affected by
+   * this addition.
    */
   private openFinalStagePopup(): void {
     if (this.popup || this.time.now - this.lastPopupToggleAt < 300) {

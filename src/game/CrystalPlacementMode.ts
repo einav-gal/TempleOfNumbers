@@ -6,7 +6,6 @@ import {
   setCrystalPlaced,
   areAllCrystalsPlaced,
 } from './GameState';
-import { createRtlText } from './rtlText';
 import { isEnvelopScaleMode } from './scaleMode';
 
 // The gem's own base tint — same palette CrystalHolder.ts already uses for
@@ -83,10 +82,6 @@ const SLOT_OFFSETS_ENVELOP: Record<CrystalId, SlotOffset> = {
   red: { dx: 0, dy: -140 },
   green: { dx: 200, dy: 55 },
 };
-
-const GUIDANCE_TEXT = 'גררו כל גביש אל השקע המתאים במנגנון.';
-const GUIDANCE_FONT_PX = 20;
-const GUIDANCE_GAP_ABOVE_TOP_SLOT_BG = 60;
 
 const TRAY_CENTER_X_BG = 762;
 const TRAY_SPACING_BG = 140;
@@ -208,7 +203,6 @@ export default class CrystalPlacementMode {
   private slots: SlotRuntime[] = [];
   private selectedCrystalId?: CrystalId;
   private scale = 1;
-  private guidanceText?: Phaser.GameObjects.Text;
   private dragTrailEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
 
   /** Fires once, right when a crystal locks into its correct slot (never on the initial restore of an already-placed crystal) — e.g. wired by CentralHallScene to nudge one of the Heart of the Temple's rings as "the mechanism activated" feedback. */
@@ -245,14 +239,12 @@ export default class CrystalPlacementMode {
     const envelop = isEnvelopScaleMode(this.scene);
     const offsets = envelop ? SLOT_OFFSETS_ENVELOP : SLOT_OFFSETS_FIT;
 
-    let topSlotBgY = MECHANISM_CENTER_Y_BG;
     this.slots.forEach((slot) => {
       const offset = offsets[slot.crystalId];
       const x = toScreenX(MECHANISM_CENTER_X_BG + offset.dx);
       const y = toScreenY(MECHANISM_CENTER_Y_BG + offset.dy);
       slot.x = x;
       slot.y = y;
-      topSlotBgY = Math.min(topSlotBgY, MECHANISM_CENTER_Y_BG + offset.dy);
 
       slot.marker.setPosition(x, y).setDisplaySize(SLOT_SIZE_BG * scale, SLOT_SIZE_BG * scale);
       this.applySlotVisualStateInstant(slot);
@@ -262,10 +254,6 @@ export default class CrystalPlacementMode {
       slot.hitRect.width = clickSize;
       slot.hitRect.height = clickSize;
     });
-
-    this.guidanceText
-      ?.setPosition(toScreenX(MECHANISM_CENTER_X_BG), toScreenY(topSlotBgY - GUIDANCE_GAP_ABOVE_TOP_SLOT_BG))
-      .setFontSize(GUIDANCE_FONT_PX * scale);
 
     const trayY = toScreenY(envelop ? TRAY_CENTER_Y_BG_ENVELOP : TRAY_CENTER_Y_BG_FIT);
     const trayRowWidth = (this.crystals.length - 1) * TRAY_SPACING_BG;
@@ -307,9 +295,6 @@ export default class CrystalPlacementMode {
     });
     this.slots = [];
 
-    this.guidanceText?.destroy();
-    this.guidanceText = undefined;
-
     this.dragTrailEmitter?.destroy();
     this.dragTrailEmitter = undefined;
   }
@@ -318,25 +303,12 @@ export default class CrystalPlacementMode {
 
   private createCrystalPlacementMode(): void {
     this.generateTextures();
-    this.createGuidanceMessage();
     this.createCrystalSlots();
     this.createCollectedCrystalsTray();
 
     this.scene.input.on(Phaser.Input.Events.DRAG_START, this.handleDragStart);
     this.scene.input.on(Phaser.Input.Events.DRAG, this.handleDrag);
     this.scene.input.on(Phaser.Input.Events.DRAG_END, this.handleDragEnd);
-  }
-
-  private createGuidanceMessage(): void {
-    this.guidanceText = createRtlText(this.scene, 0, 0, GUIDANCE_TEXT, {
-      fontSize: `${GUIDANCE_FONT_PX}px`,
-      color: '#ffe9c9',
-      stroke: '#2a1508',
-      strokeThickness: 4,
-      align: 'center',
-    })
-      .setOrigin(0.5)
-      .setDepth(REST_DEPTH);
   }
 
   private createCrystalSlots(): void {

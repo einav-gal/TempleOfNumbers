@@ -5,6 +5,8 @@ import {
   isLeftStatuePassageOpen,
   isFloorEntranceOpen,
   isWallWheelOpen,
+  areAllCrystalsCollected,
+  areAllCrystalsPlaced,
 } from './GameState';
 import { isEnvelopScaleMode, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
 
@@ -44,6 +46,21 @@ const HINTS: HintDefinition[] = [
     isDiscovered: (registry) => isWallWheelOpen(registry),
     tier1: 'יש באולם עיגול שסובב במקום, אך מעולם לא השלים את מסלולו — מה יקרה אם תניעו אותו?',
     tier2: 'חפשו את הגלגל החרוט בקיר, הממתין ליד שלא פוחדת מהעבר.',
+  },
+  {
+    // Not a guiding QUESTION like the three above — a direct instruction,
+    // since by this point (all three crystals collected) the "discovery"
+    // phase is over and the player is looking at an actual mechanism with
+    // slots and a tray of crystals. Same text for both tiers: there is no
+    // vaguer/more-specific escalation to offer here, only the one
+    // instruction. Previously shown as a permanent floating line above the
+    // mechanism (CrystalPlacementMode.ts's old guidanceText) — moved here
+    // so it's opt-in like every other hint, not a fixture on screen.
+    id: 'crystalMechanism',
+    isAvailable: (registry) => areAllCrystalsCollected(registry),
+    isDiscovered: (registry) => areAllCrystalsPlaced(registry),
+    tier1: 'גררו כל גביש אל השקע המתאים במנגנון.',
+    tier2: 'גררו כל גביש אל השקע המתאים במנגנון.',
   },
 ];
 

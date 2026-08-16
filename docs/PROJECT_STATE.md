@@ -2679,18 +2679,24 @@ it (don't just append below it) whenever one of these systems changes.
   collected crystals stay visible while in the hall.
 - **Hint system (`HintSystem.ts`):** a small, screen-fixed "רמז" (hint)
   button in the bottom-left corner, hidden whenever nothing is currently
-  pending — visible only while at least one of the hall's three
-  discovery targets (pot/lever/statue passage, floor seal, wall wheel) is
-  both *available* (e.g. the floor tile only counts once the Pink Room
-  shard is held) and *not yet discovered* (its own registry flag not yet
-  set). Clicking it cycles through whichever targets are still pending,
-  showing one of two atmospheric guiding QUESTIONS per target (a vaguer
-  one first, a more specific one the next time that same target comes up)
-  in a small dismiss-on-click popup — never a literal instruction ("click
-  the pot"), and deliberately never math-related (math stays inside each
-  room's own puzzle, not in a "where do I click" hint). Self-contained:
-  only reads the shared registry via `GameState.ts` for prerequisites/
-  discovery, no dependency on `CentralHallScene`'s own internals.
+  pending — visible only while at least one of four candidates is both
+  *available* (e.g. the floor tile only counts once the Pink Room shard is
+  held) and *not yet discovered*/not yet resolved. Three are the hall's
+  discovery targets (pot/lever/statue passage, floor seal, wall wheel),
+  each showing one of two atmospheric guiding QUESTIONS (a vaguer one
+  first, a more specific one the next time that same target comes up) —
+  never a literal instruction ("click the pot"), and deliberately never
+  math-related (math stays inside each room's own puzzle). The fourth,
+  `crystalMechanism`, is different in kind: a direct instruction ("גררו כל
+  גביש אל השקע המתאים במנגנון"), available once all three crystals are
+  collected and retired once all three are placed — this is the line that
+  used to float permanently above the Heart of the Temple (see
+  `CrystalPlacementMode.ts` below) before it moved here to be opt-in like
+  every other hint. All four show in a small dismiss-on-click popup, and
+  clicking the button cycles through whichever are still pending.
+  Self-contained: only reads the shared registry via `GameState.ts` for
+  prerequisites/discovery, no dependency on `CentralHallScene`'s own
+  internals.
 - **Left doorway (removed):** the original left-doorway hotspot
   (`Doorway.ts` instance at background-px 195,545) and its destination,
   `PuzzlePlaceholderScene.ts` (a single standalone order-of-operations
@@ -2702,11 +2708,15 @@ it (don't just append below it) whenever one of these systems changes.
   (Pink Room, Libra Room, Room 3) existed. This is unrelated to Entrance 1
   below (the statue passage), which is untouched.
 - **Crystal-return mechanism (`CrystalPlacementMode.ts`):** once all three
-  crystals are collected, a short Hebrew guidance line ("גררו כל גביש אל
-  השקע המתאים במנגנון") appears above the Heart of the Temple, along with
-  three diamond-shaped slots arranged around it — pink left, red top,
-  green right — and a tray of draggable, glowing crystal gems near the
-  bottom of the hall. Dragging (or click-then-click) a crystal into its
+  crystals are collected, three diamond-shaped slots appear arranged
+  around the Heart of the Temple — pink left, red top, green right — along
+  with a tray of draggable, glowing crystal gems near the bottom of the
+  hall. The instruction that used to float permanently above the
+  mechanism ("גררו כל גביש אל השקע המתאים במנגנון") is no longer a fixture
+  on screen — it moved into `HintSystem.ts` as a fourth, opt-in hint
+  (`id: 'crystalMechanism'`), available once all three crystals are
+  collected and retired once all three are placed. Dragging (or
+  click-then-click) a crystal into its
   own correct, empty slot locks it there with a brief flash and a nudge to
   the ONE ring tied to that specific crystal (see "Heart of the Temple —
   ring-opening mechanism" below); a wrong drop/slot returns it smoothly.
@@ -2723,7 +2733,9 @@ it (don't just append below it) whenever one of these systems changes.
   - **`caged`:** the three rings surround/cross in front of the crystal
     like a lock, swaying gently (unchanged from earlier sprints); the
     crystal is still clickable, but only ever opens the pre-existing
-    "dormant" popup (`POPUP_TEXT`) — unchanged, existing behavior.
+    "dormant" popup (`POPUP_TEXT` — "לב המקדש רדום.", Hebrew RTL like
+    every other popup in the game) — otherwise unchanged, existing
+    behavior.
   - Each of the 3 rings is tied to exactly one crystal (matching
     `CrystalPlacementMode`'s own left/top/right layout) — **and falls
     immediately, individually, the moment its own crystal is placed**

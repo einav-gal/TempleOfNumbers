@@ -1280,3 +1280,78 @@ cropped at the top, its title not visible.
   panel height/offset, ENVELOP's ~190bg-px crop) to confirm the fix
   clears the crop line with margin; not yet re-verified on the reporter's
   own physical device.
+
+---
+
+## Sprint — Translated the "Dormant Crystal" Popup to Hebrew
+
+### Status
+
+Completed
+
+### Goal
+
+The Heart of the Temple's "dormant" popup (shown when clicking the caged
+crystal before it's ready) was still in plain English — the one popup in
+the game left over from before the project's Hebrew RTL convention.
+Translate it to match every other popup.
+
+### Completed
+
+- **`src/scenes/CentralHallScene.ts`:** `POPUP_TEXT` changed from "The
+  Heart of the Temple is dormant." to "לב המקדש רדום.". The message and
+  close-hint (`— click to close —` → `— לחצו לסגירה —`) now render via
+  `createRtlText()` instead of a plain `this.add.text()`, matching every
+  other popup in the game (including `openFinalStagePopup()`'s own "you
+  won" message, right next to it in the same file). Removed the
+  now-unused `FONT_FAMILY` import (only used by the old plain-text call).
+
+### Out of Scope (respected)
+
+- `openFinalStagePopup()` itself, the popup shell (`drawStonePanel()`,
+  overlay, fade timing), and everything else in this file — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Moved the Crystal-Mechanism Instruction Into the Hint System
+
+### Status
+
+Completed
+
+### Goal
+
+The crystal-return mechanism's instruction ("גררו כל גביש אל השקע המתאים
+במנגנון") was a permanent floating line above the Heart of the Temple,
+inconsistent with the hall's other three hidden-entrance hints, which are
+all opt-in (only shown on request via the "רמז" button). Move it into the
+same hint system instead of leaving it as a fixture on screen.
+
+### Completed
+
+- **`src/game/HintSystem.ts`:** added a fourth hint, `crystalMechanism` —
+  available once `areAllCrystalsCollected()` is true, retired once
+  `areAllCrystalsPlaced()` is true. Unlike the other three (a vaguer
+  guiding question, then a more specific one), this one is a direct
+  instruction with no vaguer/more-specific escalation to offer, so both
+  tiers show the same text: "גררו כל גביש אל השקע המתאים במנגנון."
+- **`src/game/CrystalPlacementMode.ts`:** removed the now-redundant
+  always-visible guidance text entirely — `GUIDANCE_TEXT`/
+  `GUIDANCE_FONT_PX`/`GUIDANCE_GAP_ABOVE_TOP_SLOT_BG` constants, the
+  `guidanceText` field, `createGuidanceMessage()`, its positioning in
+  `layout()` (including the now-unneeded `topSlotBgY` tracking), and its
+  cleanup in `destroy()`. Removed the now-unused `createRtlText` import.
+
+### Out of Scope (respected)
+
+- The slots, tray, drag/drop/click-to-place logic, ring-nudge callback,
+  and everything else in `CrystalPlacementMode.ts` — untouched.
+- The other three hints in `HintSystem.ts` — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
