@@ -859,7 +859,15 @@ export default class LibraPuzzle {
     const value = question.correctAnswer;
     const index = this.correctAnswerCount;
 
-    this.destroyStones();
+    // The placed stone (and the other, untouched ones) stay exactly where
+    // they are through the crystal-reveal/fly-to-banner sequence below —
+    // no longer destroyed here. Whatever comes next already destroys them
+    // at the right moment: startNextQuestion() → loadQuestion() →
+    // createAnswerStones() destroys the old set before building the new
+    // one, and completeLibraRoom() (the 5th, final question) destroys
+    // them itself. So the answer stays visibly resting on the scale until
+    // the next question's cards actually replace it, not the instant the
+    // "correct" feedback popup closes.
     this.equationText?.setVisible(false);
     this.targetOutline?.setVisible(false);
 

@@ -2851,10 +2851,14 @@ it (don't just append below it) whenever one of these systems changes.
   the Central Hall's crystal slots; both input paths converge on the same
   `acceptAnswer()`). Each drop/placement is validated immediately (no
   separate confirm click, unlike the Pink Room's ring-then-check flow). A
-  wrong answer retries the *same* question rather than skipping to a
-  different one. On completion, plays a reward sequence and flies a
-  reward crystal into the `CrystalHolder`'s **red** slot, sets the room's
-  `completed` state in the registry, and unlocks the exit.
+  correct answer stays visibly resting on the pan through the whole
+  crystal digit-reveal/fly-to-banner sequence, only actually removed once
+  the next question's cards (or, on the 5th, `completeLibraRoom()`)
+  replace it — not the instant the "נכון!" feedback popup closes. A wrong
+  answer retries the *same* question rather than skipping to a different
+  one. On completion, plays a reward sequence and flies a reward crystal
+  into the `CrystalHolder`'s **red** slot, sets the room's `completed`
+  state in the registry, and unlocks the exit.
 - **Exit:** reuses the background's own painted archway + stairway (right
   side of frame) via `Doorway.ts`, same technique as the Pink Room. Once
   unlocked, the doorway also gets a clearly-visible animated "attention"

@@ -1494,3 +1494,45 @@ in the top-left corner, next to the crystal pouch bar.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Libra Room: Answer Stone Stays on the Scale Until the Next Question Loads
+
+### Status
+
+Completed
+
+### Goal
+
+After placing a correct answer stone (via either drag or the new
+click-to-select-then-place), it was disappearing the instant the "נכון!"
+feedback popup closed — well before the next question's cards actually
+appeared, during the crystal digit-reveal/fly-to-banner animation that
+plays in between. It should stay resting on the pan until the next
+question genuinely replaces it.
+
+### Completed
+
+- **`src/game/LibraPuzzle.ts`:** removed the premature `destroyStones()`
+  call from the top of `finishCorrectAnswer()`. It turned out to be
+  redundant, not load-bearing: both places execution can go from there
+  already destroy the old stones at the right moment —
+  `startNextQuestion()` → `loadQuestion()` → `createAnswerStones()`
+  destroys the previous set before building the new one, and
+  `completeLibraRoom()` (the 5th, final question) destroys them itself.
+  Removing the early call simply lets the placed stone (and the other,
+  untouched ones) stay visible through the whole reveal/fly-to-banner
+  sequence instead of vanishing right as the popup closes.
+
+### Out of Scope (respected)
+
+- The incorrect-answer path (`handleIncorrectAnswer`/
+  `finishIncorrectAnswer`) never had this early destroy in the first
+  place — untouched, behaves exactly as before.
+- The reveal/banner/reward logic itself, and everything else in this
+  file — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
