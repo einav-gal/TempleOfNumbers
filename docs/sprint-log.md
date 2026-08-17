@@ -1722,3 +1722,38 @@ previous legibility pass.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Room 3 Title Strip Switches to a "Return to the Hall" Message Once Solved
+
+### Status
+
+Completed
+
+### Goal
+
+The permanent title strip above Room 3's map ("איזה חלק מהמפה מואר?")
+kept showing that question even after the puzzle was fully solved, with
+no more questions left to answer. Replace it with "סיימתם את החידה, חזרו
+לאולם המרכזי" once solved.
+
+### Completed
+
+- **`src/game/MapFractionPuzzle.ts`:** added `TITLE_TEXT_SOLVED`. Set on
+  `this.titleText` in two places: live, the instant the 3rd correct card
+  lands in `handleCardAnswer()` (the same moment `this.solved = true`/
+  `setRoom3PuzzleSolved()` fire, well before the reward crystal starts
+  its flight or either "complete" toast shows); and instantly on a
+  restored/already-solved re-entry, in `create()`'s `if (this.solved)`
+  branch (which previously left `titleText` untouched, still showing the
+  original question).
+
+### Out of Scope (respected)
+
+- The question bank, card validation, code-digit reveal, reward/feedback
+  logic, and everything else in this file — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

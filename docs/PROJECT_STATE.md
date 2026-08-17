@@ -2928,6 +2928,13 @@ it (don't just append below it) whenever one of these systems changes.
   overlay (`showAnswerFeedback('roomComplete', …)`), matching the
   two-stage "code complete, then room complete" shape `LibraPuzzle.ts`
   already had. This completes the crystal-collection system.
+- **Title strip:** the screen-fixed banner above the map reads "איזה חלק
+  מהמפה מואר?" throughout the active puzzle, and switches permanently to
+  "סיימתם את החידה, חזרו לאולם המרכזי" the instant the puzzle is solved
+  (right when the 3rd correct card lands, in `handleCardAnswer()` — the
+  same moment `setRoom3PuzzleSolved()` is called, well before the reward
+  crystal even starts flying) and instantly on a restored/already-solved
+  re-entry (`create()`'s `if (this.solved)` branch).
 - **Room's own crystal:** a large decorative `green-crystal.png` to the
   right of the map (not the `CrystalHolder` UI), on a procedural stone
   pedestal, with idle hover/scale-breathe animation stopped the instant

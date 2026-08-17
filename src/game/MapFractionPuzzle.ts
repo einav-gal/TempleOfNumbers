@@ -107,6 +107,11 @@ const GLOW_PULSE_MS = 900;
 // down by exactly this strip's height + gap (see layout()) to make room
 // for it, so the two can never overlap.
 const TITLE_TEXT = 'איזה חלק מהמפה מואר?';
+// Replaces TITLE_TEXT once the puzzle is solved (live, right when the 3rd
+// correct answer lands — see handleCardAnswer() — and instantly on a
+// restored/already-solved re-entry — see create()'s `if (this.solved)`
+// branch) — there's no more question to relate to at that point.
+const TITLE_TEXT_SOLVED = 'סיימתם את החידה, חזרו לאולם המרכזי';
 const TITLE_STRIP_HEIGHT_PX = 64;
 const TITLE_MAP_GAP_PX = 22; // >= the requested 20px minimum clearance
 const TITLE_FONT_PX = 34; // fixed screen px, within the requested 32-38 range
@@ -461,6 +466,7 @@ export default class MapFractionPuzzle {
     this.createCodeBanner();
 
     if (this.solved) {
+      this.titleText?.setText(TITLE_TEXT_SOLVED);
       this.cellGlows.forEach((glow) => glow.setVisible(false));
       this.cardsContainer.setVisible(false);
       this.applyGlow(false);
@@ -716,6 +722,7 @@ export default class MapFractionPuzzle {
       if (this.correctCount >= REQUIRED_CORRECT_ANSWERS) {
         this.solved = true;
         setRoom3PuzzleSolved(this.scene.registry);
+        this.titleText?.setText(TITLE_TEXT_SOLVED);
         this.showAnswerFeedback('final', () => this.beginRewardSequence());
         return;
       }
