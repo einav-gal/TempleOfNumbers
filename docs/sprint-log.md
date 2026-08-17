@@ -1665,3 +1665,60 @@ staying fixed in place.
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Fixed Hint Popup Accidentally Opening the Crystal Popup Too
+
+### Status
+
+Completed
+
+### Goal
+
+Reported bug: clicking the "— לחצו לסגירה —" line inside the hint popup
+(`HintSystem.ts`) also popped open the "לב המקדש רדום" (dormant crystal)
+popup in Central Hall. Also: that close-hint line (and the same line in
+`CentralHallScene`'s own two popups) still read too small even after the
+previous legibility pass.
+
+### Completed
+
+- **Root cause:** both `HintSystem.ts`'s hint popup and
+  `CentralHallScene`'s crystal popups are screen-centered — the same
+  general area the Heart of the Temple's crystal sits in — and dismiss
+  themselves via a scene-wide "click anywhere" listener rather than a
+  dedicated close button. Their dim overlay rectangles were purely
+  decorative (never `setInteractive()`'d), so a click on them wasn't
+  actually intercepted at the Phaser hit-testing level — it passed
+  straight through to whatever real interactive object happened to sit
+  at that same screen position underneath, in world space: the crystal's
+  own click zone, which fired `openPopup()` at the same moment the
+  scene-wide listener closed whichever popup was actually clicked.
+- **`src/game/HintSystem.ts`:** the hint popup's overlay rectangle is now
+  `setInteractive()` (no listener of its own needed — it just needs to
+  occupy the "topmost hit" slot so nothing underneath receives the
+  click); the scene-wide dismiss listener still fires and closes the
+  popup exactly as before. Also bumped `POPUP_CLOSE_HINT_FONT_PX`
+  18px→22px.
+- **`src/scenes/CentralHallScene.ts`:** the same `setInteractive()` fix
+  applied to `popupOverlay` in both `openPopup()` and
+  `openFinalStagePopup()` (identical construction in both, same latent
+  bug class, even though it wasn't independently reported there — this
+  scene's own popup happens to no-op harmlessly against itself since
+  `openPopup()`'s own guard checks `this.popup`, but the same missing
+  `setInteractive()` could let a click leak through to something ELSE
+  underneath just as easily). Also bumped the "— לחצו לסגירה —" line in
+  both popups from 16px to 22px, matching `HintSystem.ts`'s.
+
+### Out of Scope (respected)
+
+- `RoundIntroPopup.ts`/`FeedbackPopup.ts`'s own dim overlays are also not
+  interactive, but neither uses a "click anywhere closes it" pattern
+  (dismissed by an explicit button, or auto-hidden by a timer), so they
+  aren't exposed to this same bug — left untouched.
+- Everything else in both touched files — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.

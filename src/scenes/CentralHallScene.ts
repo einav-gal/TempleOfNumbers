@@ -525,10 +525,19 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.popup = this.add.container(width / 2, height / 2).setDepth(100);
 
-    // Dim the hall while the popup is open.
+    // Dim the hall while the popup is open — interactive (even with no
+    // listener of its own) so it actually intercepts clicks at the
+    // Phaser hit-testing level, rather than letting them pass through to
+    // whatever's underneath in world space (e.g. the crystal itself,
+    // which sits roughly centered like this popup) while the scene-wide
+    // dismiss listener (closePopup(), see create()) closes the popup.
+    // Without this, a click on the popup could simultaneously close it
+    // AND re-open it (or open a different popup) via that same click
+    // reaching the crystal's own handler underneath.
     this.popupOverlay = this.add
       .rectangle(-width / 2, -height / 2, width, height, 0x000000, 0.5)
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setInteractive();
     this.popup.add(this.popupOverlay);
 
     this.heart?.setSuppressed(true);
@@ -546,7 +555,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: '16px',
+      fontSize: '22px',
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);
@@ -599,7 +608,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: '16px',
+      fontSize: '22px',
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);

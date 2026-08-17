@@ -2723,10 +2723,20 @@ it (don't just append below it) whenever one of these systems changes.
   own inline feedback, and `CentralHallScene`'s two crystal popups) got
   the same legibility pass in the same sprint, all sized generously rather
   than just proportionally so wrapped multi-line copy has real safety
-  margin. Reads the shared registry via `GameState.ts` for prerequisites/
-  discovery; its only other coupling is the imported `CrystalHolder.ts`
-  layout constants above, no dependency on `CentralHallScene`'s own
-  internals.
+  margin; the "— לחצו לסגירה —" close-hint line specifically (here and in
+  `CentralHallScene`'s two popups) was bumped again after that, to 22px in
+  both places, on continued feedback that it was still too small. The
+  popup's dim overlay rectangle is now `setInteractive()` (with no
+  listener of its own) so it actually blocks clicks at the Phaser
+  hit-testing level instead of passing them through to whatever's
+  underneath in world space — this popup is screen-centered, near where
+  the Heart of the Temple's crystal sits, so a click on it (e.g. the
+  close-hint line) could otherwise also reach the crystal's own click
+  handler and pop `openPopup()` open at the same time this popup closes
+  via the scene-wide dismiss listener. Reads the shared registry via
+  `GameState.ts` for prerequisites/discovery; its only other coupling is
+  the imported `CrystalHolder.ts` layout constants above, no dependency
+  on `CentralHallScene`'s own internals.
 - **Left doorway (removed):** the original left-doorway hotspot
   (`Doorway.ts` instance at background-px 195,545) and its destination,
   `PuzzlePlaceholderScene.ts` (a single standalone order-of-operations
@@ -2764,8 +2774,13 @@ it (don't just append below it) whenever one of these systems changes.
     like a lock, swaying gently (unchanged from earlier sprints); the
     crystal is still clickable, but only ever opens the pre-existing
     "dormant" popup (`POPUP_TEXT` — "לב המקדש רדום.", Hebrew RTL like
-    every other popup in the game) — otherwise unchanged, existing
-    behavior.
+    every other popup in the game). That popup's own dim overlay is now
+    `setInteractive()` (see `openPopup()`/`openFinalStagePopup()` in
+    `CentralHallScene.ts`), so it actually blocks clicks instead of
+    letting them reach the crystal underneath — this was the fix for a
+    reported bug where clicking `HintSystem.ts`'s hint-popup close-hint
+    line (screen-centered, overlapping the crystal's own position) also
+    popped this dormant-crystal popup open.
   - Each of the 3 rings is tied to exactly one crystal (matching
     `CrystalPlacementMode`'s own left/top/right layout) — **and falls
     immediately, individually, the moment its own crystal is placed**

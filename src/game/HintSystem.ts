@@ -87,7 +87,7 @@ const CLOSE_HINT_TEXT = '— לחצו לסגירה —';
 const POPUP_PANEL_WIDTH_MAX_PX = 720;
 const POPUP_PANEL_HEIGHT_PX = 280;
 const POPUP_TEXT_FONT_PX = 34;
-const POPUP_CLOSE_HINT_FONT_PX = 18;
+const POPUP_CLOSE_HINT_FONT_PX = 22;
 
 /**
  * A small, always-in-the-corner "hint" button for Central Hall's three
@@ -241,7 +241,18 @@ export default class HintSystem {
     const width = this.scene.scale.width;
     const height = this.scene.scale.height;
 
-    const overlay = this.scene.add.rectangle(-width / 2, -height / 2, width, height, 0x000000, 0.55).setOrigin(0, 0);
+    // Interactive (even with no listener of its own) so it actually
+    // intercepts clicks at the Phaser hit-testing level, rather than
+    // letting them pass through to whatever's underneath in world space
+    // — this popup is screen-centered, roughly where the Heart of the
+    // Temple's crystal sits too, so a click here (e.g. on the close-hint
+    // line) could otherwise ALSO reach the crystal's own click handler
+    // underneath and pop that popup open, on top of this one closing via
+    // the scene-wide dismiss listener (onGlobalPointerDown, below).
+    const overlay = this.scene.add
+      .rectangle(-width / 2, -height / 2, width, height, 0x000000, 0.55)
+      .setOrigin(0, 0)
+      .setInteractive();
 
     const panelWidth = Math.min(width * 0.9, POPUP_PANEL_WIDTH_MAX_PX);
     const panelHeight = POPUP_PANEL_HEIGHT_PX;
