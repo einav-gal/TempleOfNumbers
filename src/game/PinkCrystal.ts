@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import pinkCrystalUrl from '../../assets/images/PinkRoom/pink.png';
+import { isEnvelopScaleMode } from './scaleMode';
 
 const CRYSTAL_KEY = 'pink-room-crystal';
 const SOFT_KEY = 'pink-room-soft';
@@ -161,7 +162,20 @@ export default class PinkCrystal {
     // alpha stays at the default 1; no blur.
     this.image = this.scene.add.image(0, 0, CRYSTAL_KEY).setOrigin(0.5, 0.5).setDepth(depth);
 
-    this.postFxGlow = this.image.postFX?.addGlow(GLOW_COLOR, 0, 0, false, 0.1, 16);
+    // Skipped on short phone-landscape screens (ENVELOP scale mode) —
+    // reported as a large, broken-looking horizontal light streak shooting
+    // out of the crystal on a real device there. The WebGL postFX Glow
+    // pipeline's render-target resolution appears to mismatch the actual
+    // canvas aspect specifically under ENVELOP's real-viewport-vs-fixed-
+    // 1536x1024-design-canvas divergence (worst on a landscape phone,
+    // where that divergence is largest) — the ambient glowBlob Image
+    // above (plain additive sprite, no WebGL FX) already carries the
+    // crystal's soft halo on its own, so this is purely the extra rim
+    // glow, safe to drop in that one mode without losing the effect
+    // entirely.
+    this.postFxGlow = isEnvelopScaleMode(this.scene)
+      ? undefined
+      : this.image.postFX?.addGlow(GLOW_COLOR, 0, 0, false, 0.1, 16);
 
     this.glintFlash = this.scene.add
       .image(0, 0, SOFT_KEY)

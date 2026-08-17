@@ -3,15 +3,29 @@ import Phaser from 'phaser';
 // TEMPORARY diagnostic — logs pointer/world/camera state and the
 // clicked object's name on every pointerdown, to verify clicks actually
 // reach game objects correctly after a pinch/pan. Same on/off-flag
-// convention as EquivalencePuzzle.ts's DEBUG_LOG_SELECTION. Flip to
-// false once verified on a real device.
-const DEBUG_LOG_CLICKS = true;
+// convention as EquivalencePuzzle.ts's DEBUG_LOG_SELECTION. Now verified
+// on a real device — left here, off, in case it's needed again.
+const DEBUG_LOG_CLICKS = false;
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 2.5;
 const SUPPRESS_CLICKS_COOLDOWN_MS = 150; // within the requested 120-180ms range
 const ZOOM_ACTIVE_THRESHOLD = 1.05;
 const PAN_ACTIVE_THRESHOLD_PX = 4;
+// Safety-net only: normally suppressClicks clears itself within
+// SUPPRESS_CLICKS_COOLDOWN_MS of onTouchEnd() seeing zero remaining
+// touches (see stopSuppressingClicksAfterCooldown()). But this class's
+// listeners are attached to the canvas element specifically (see the
+// class doc comment for why raw DOM listeners are used at all) — if a
+// finger involved in a pinch lifts while positioned outside the canvas's
+// current bounds (very easy to do mid-pinch, fingers spread wide, in
+// fullscreen landscape), some mobile browsers can fail to deliver that
+// touch's touchend/touchcancel to this element at all, leaving `touches`
+// stuck with a phantom entry that never reaches zero — which would
+// otherwise leave scene.input.enabled=false, and every click dead, for
+// the rest of the session. This forces a clean recovery no matter why
+// the normal path didn't fire, without changing that normal path at all.
+const MAX_SUPPRESS_CLICKS_MS = 1500;
 
 interface TouchPoint {
   x: number;
@@ -130,6 +144,8 @@ export default class MobilePinchZoom {
   private defaultScrollY = 0;
 
   private suppressClicksTimer?: Phaser.Time.TimerEvent;
+  /** Safety-net timer — see MAX_SUPPRESS_CLICKS_MS above. Reset every time a fresh pinch/pan begins, cleared whenever suppressClicks clears through any path. */
+  private forceClearSuppressTimer?: Phaser.Time.TimerEvent;
 
   private readonly handleTouchStart = (event: TouchEvent) => this.onTouchStart(event);
   private readonly handleTouchMove = (event: TouchEvent) => this.onTouchMove(event);
@@ -238,6 +254,7 @@ export default class MobilePinchZoom {
       this.scene.input.off(Phaser.Input.Events.GAMEOBJECT_DOWN, this.handleDebugGameObjectDown);
     }
     this.suppressClicksTimer?.remove();
+    this.forceClearSuppressTimer?.remove();
     if (MobilePinchZoom.activeInstance === this) {
       MobilePinchZoom.activeInstance = undefined;
     }
@@ -394,15 +411,30 @@ export default class MobilePinchZoom {
     this.suppressClicksTimer?.remove();
     this.suppressClicks = true;
     this.scene.input.enabled = false;
+
+    // Re-armed on every fresh pinch/pan start (a long continuous gesture
+    // keeps pushing this out, which is fine — only a genuinely stuck
+    // state should ever trip it). See MAX_SUPPRESS_CLICKS_MS above.
+    this.forceClearSuppressTimer?.remove();
+    this.forceClearSuppressTimer = this.scene.time.delayedCall(MAX_SUPPRESS_CLICKS_MS, () => {
+      this.restoreClicks();
+    });
   }
 
-  /** The single place suppressClicks/scene.input.enabled are ever restored — only ever called once every touch has actually lifted (see onTouchEnd()'s touches.size===0 branch and abortGesture()). */
+  /** The single place suppressClicks/scene.input.enabled are ever restored on the normal path — only ever called once every touch has actually lifted (see onTouchEnd()'s touches.size===0 branch and abortGesture()). */
   private stopSuppressingClicksAfterCooldown(): void {
     this.suppressClicksTimer?.remove();
     this.suppressClicksTimer = this.scene.time.delayedCall(SUPPRESS_CLICKS_COOLDOWN_MS, () => {
-      this.suppressClicks = false;
-      this.scene.input.enabled = true;
+      this.restoreClicks();
     });
+  }
+
+  /** Actually clears suppressClicks/re-enables input, and cancels the safety-net timer since it's no longer needed — shared by the normal cooldown path and the MAX_SUPPRESS_CLICKS_MS safety net. */
+  private restoreClicks(): void {
+    this.forceClearSuppressTimer?.remove();
+    this.forceClearSuppressTimer = undefined;
+    this.suppressClicks = false;
+    this.scene.input.enabled = true;
   }
 
   /** Cancels any in-flight gesture and restores input immediately (no cooldown) — used when this whole controller is disabled mid-gesture (see disable()) or fully reset (see reset()). */
@@ -419,8 +451,7 @@ export default class MobilePinchZoom {
     this.pinchPrevMidpoint = { x: 0, y: 0 };
     this.suppressClicksTimer?.remove();
     if (this.suppressClicks) {
-      this.suppressClicks = false;
-      this.scene.input.enabled = true;
+      this.restoreClicks();
     }
   }
 

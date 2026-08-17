@@ -1757,3 +1757,134 @@ no more questions left to answer. Replace it with "סיימתם את החידה,
 ### Verification
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
+
+---
+
+## Sprint — Fixed Broken Crystal Glow Streaks on Real Mobile Devices
+
+### Status
+
+Completed
+
+### Goal
+
+Real-device screenshots (short phone-landscape, ENVELOP scale mode)
+showed both the Pink Room crystal and the Central Hall's Heart of the
+Temple crystal rendering a large, broken-looking horizontal light beam
+shooting sideways off-screen in the crystal's own color, instead of a
+soft glow — reported alongside "mobile doesn't work at all."
+
+### Completed
+
+- **Root cause (working theory, not directly provable without a live
+  device):** every affected object uses `image.postFX?.addGlow(...)` —
+  Phaser's WebGL Glow FX pipeline. Regular (non-FX) sprites in the same
+  screenshots render correctly; only postFX objects are affected. ENVELOP
+  mode is the one scale mode where the real rendered viewport's aspect
+  ratio diverges furthest from the fixed 1536×1024 design canvas
+  (worst on a short landscape phone) — the working theory is the Glow FX
+  pipeline's render-target resolution doesn't correctly track that
+  divergence, stretching the glow's blur radius wildly in one axis.
+- Compared the background art directly (`Background_Room2.png`) against
+  the screenshot first, to rule out "this is just baked-in placeholder
+  art becoming prominent" — the background's own placeholder beam is
+  a thin *vertical* line, nothing like the horizontal streak reported, so
+  this was ruled out as a genuine rendering bug rather than an art issue.
+- **Fix — skip `postFX.addGlow()` when `isEnvelopScaleMode(scene)` is
+  true**, in all five places found in the codebase:
+  `src/game/PinkCrystal.ts` (keeps its own non-FX `glowBlob` Image as the
+  ambient halo on mobile — this was purely the extra rim glow),
+  `src/game/HeartOfTheTemple.ts` (no non-FX fallback — the crystal simply
+  has no glow on mobile now, rather than a broken one),
+  `src/scenes/Room3Scene.ts` (both the pedestal's and the big crystal's
+  glows), and `src/game/MapFractionPuzzle.ts` (the solved-map glow). Every
+  existing usage of the resulting `Phaser.FX.Glow | undefined` field was
+  already `if (this.glowFx) {...}`-guarded, so `undefined` needed no
+  further changes downstream.
+- **`src/game/MobilePinchZoom.ts`:** flipped the temporary
+  `DEBUG_LOG_CLICKS` diagnostic flag back to `false` — it had been left
+  on pending real-device verification, which just happened.
+
+### Out of Scope (respected)
+
+- Did not attempt to patch or work around Phaser's Glow FX pipeline
+  itself, or its `resolution`/`onPreRender` internals — that's core
+  engine behavior, out of scope to modify.
+- Desktop/tablet FIT-mode rendering — completely untouched, since the
+  skip is gated on `isEnvelopScaleMode()`.
+- Two other reported mobile issues from the same message — the hint
+  button/`CrystalHolder` bar reportedly still hard to see, and pinch-zoom
+  "not working well" — need more specific detail (what exactly happens)
+  before a further code change; not addressed in this sprint.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device (no such access in this environment) —
+  the user will re-test on her own phone after this deploys.
+
+---
+
+## Sprint — Mobile Follow-Up: Stuck Pinch-Zoom Clicks, Hint Button/Pouch Still Too Small
+
+### Status
+
+Completed
+
+### Goal
+
+Follow-up detail from the previous mobile-investigation message: pinch
+"not working well" turned out to mean clicks on objects stop working
+after a pinch; the hint button and `CrystalHolder` pouch are correctly
+positioned but still read too small on a real device even after two
+earlier size bumps.
+
+### Completed
+
+- **`src/game/MobilePinchZoom.ts` — stuck-click safety net:** this
+  class's touch listeners are attached to the canvas element specifically
+  (see its own doc comment for why raw DOM listeners are used at all); if
+  a finger involved in a pinch lifts while positioned outside the
+  canvas's current bounds (easy mid-pinch, fingers spread wide,
+  fullscreen landscape), some mobile browsers can fail to deliver that
+  touch's touchend/touchcancel there, leaving the tracked `touches` map
+  stuck with a phantom entry that never reaches zero — so the normal
+  "all touches ended" cooldown never fires, leaving
+  `scene.input.enabled=false` (every click dead) for the rest of the
+  session. Added `MAX_SUPPRESS_CLICKS_MS` (1500ms): `startSuppressingClicks()`
+  now also arms a safety-net timer that force-clears `suppressClicks`/
+  re-enables input regardless of why the normal path didn't fire,
+  re-armed on every fresh pinch/pan start (so a long continuous gesture
+  never trips it, only a genuinely stuck one) and shared with the normal
+  cooldown path via a new `restoreClicks()` helper.
+- **`src/game/CrystalHolder.ts`/`src/game/HintSystem.ts` — scaled up on
+  mobile:** both still read too small on a real device despite earlier
+  bumps. `CrystalHolder.ts`'s container now gets its own exported
+  `ENVELOP_HOLDER_SCALE` (1.4) via `container.setScale()` — grows
+  down-right from its fixed top-left anchor, in ENVELOP mode only.
+  `HintSystem.ts`'s button container gets its own `ENVELOP_BUTTON_SCALE`
+  (1.3) the same way; `layout()`'s Y-position math now uses the holder's
+  *effective* (scaled) height rather than the raw `HOLDER_HEIGHT_PX`
+  constant, so the two stay correctly grouped in both modes.
+- **Found and fixed a real, previously-latent bug while making this
+  change:** `CrystalHolder.getSlotScreenPosition()` computed a slot's
+  screen position as `container.x + slot.frame.x` — a plain add with no
+  scale factor, which only ever worked because the container was always
+  at scale 1 before now. Reward-crystal flights
+  (`EquivalencePuzzle.ts`/`LibraPuzzle.ts`/`MapFractionPuzzle.ts`, all of
+  which call this to aim their flight) would have landed at the wrong,
+  unscaled spot in ENVELOP mode otherwise. Fixed to multiply the local
+  offset by `container.scaleX`/`scaleY`, correct at any scale.
+
+### Out of Scope (respected)
+
+- Desktop/tablet FIT-mode sizing/positioning for all of the above —
+  completely untouched, gated on `isEnvelopScaleMode()`.
+- `DEBUG_LOG_CLICKS` (already flipped off in the previous sprint) —
+  untouched here.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device (no such access in this environment) —
+  the user will re-test on her own phone after this deploys.

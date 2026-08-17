@@ -9,7 +9,7 @@ import {
   areAllCrystalsPlaced,
 } from './GameState';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
-import { HOLDER_MARGIN_X_PX, HOLDER_MARGIN_Y_PX, HOLDER_HEIGHT_PX } from './CrystalHolder';
+import { HOLDER_MARGIN_X_PX, HOLDER_MARGIN_Y_PX, HOLDER_HEIGHT_PX, ENVELOP_HOLDER_SCALE } from './CrystalHolder';
 
 interface HintDefinition {
   id: string;
@@ -71,6 +71,11 @@ const BUTTON_LABEL_FONT_PX = 26;
 // button's top edge, so the two read as one grouped cluster in the
 // top-left corner rather than accidentally touching.
 const BUTTON_GAP_BELOW_HOLDER_PX = 12;
+// Scaled up as a whole (container.setScale()) on short phone-landscape
+// screens, same reasoning/technique as CrystalHolder.ts's own
+// ENVELOP_HOLDER_SCALE — real-device feedback that this button read too
+// small there even after earlier size bumps.
+const ENVELOP_BUTTON_SCALE = 1.3;
 const BUTTON_DEPTH = 80;
 const POPUP_DEPTH = 150;
 const TOGGLE_DEBOUNCE_MS = 300;
@@ -133,6 +138,9 @@ export default class HintSystem {
     }).setOrigin(0.5);
 
     this.buttonContainer = this.scene.add.container(0, 0, [bg, label]).setDepth(BUTTON_DEPTH).setScrollFactor(0);
+    if (isEnvelopScaleMode(this.scene)) {
+      this.buttonContainer.setScale(ENVELOP_BUTTON_SCALE);
+    }
 
     const half = BUTTON_SIZE_PX / 2;
     this.buttonContainer.setInteractive(new Phaser.Geom.Rectangle(-half, -half, BUTTON_SIZE_PX, BUTTON_SIZE_PX), Phaser.Geom.Rectangle.Contains);
@@ -177,9 +185,15 @@ export default class HintSystem {
     const width = this.scene.scale.width;
     const height = this.scene.scale.height;
 
-    const holderTopMargin = isEnvelopScaleMode(this.scene) ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
-    const buttonY = holderTopMargin + HOLDER_HEIGHT_PX + BUTTON_GAP_BELOW_HOLDER_PX + BUTTON_SIZE_PX / 2;
-    this.buttonContainer?.setPosition(HOLDER_MARGIN_X_PX + BUTTON_SIZE_PX / 2, buttonY);
+    const isEnvelop = isEnvelopScaleMode(this.scene);
+    const holderTopMargin = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
+    // Both the holder (above) and this button scale up together in
+    // ENVELOP mode — their effective (scaled) sizes, not the raw
+    // constants, are what actually determine the gap/position on screen.
+    const holderHeight = HOLDER_HEIGHT_PX * (isEnvelop ? ENVELOP_HOLDER_SCALE : 1);
+    const buttonHalf = (BUTTON_SIZE_PX / 2) * (isEnvelop ? ENVELOP_BUTTON_SCALE : 1);
+    const buttonY = holderTopMargin + holderHeight + BUTTON_GAP_BELOW_HOLDER_PX + buttonHalf;
+    this.buttonContainer?.setPosition(HOLDER_MARGIN_X_PX + buttonHalf, buttonY);
 
     if (this.popupContainer) {
       this.popupContainer.setPosition(width / 2, height / 2);

@@ -17,6 +17,15 @@ export const HOLDER_WIDTH_PX = 186;
 export const HOLDER_HEIGHT_PX = 70;
 export const HOLDER_MARGIN_X_PX = 18;
 export const HOLDER_MARGIN_Y_PX = 18;
+// Scaled up as a whole (container.setScale(), growing down-right from its
+// fixed top-left anchor — never re-baked into the generated textures)
+// specifically on short phone-landscape screens, after real-device
+// feedback that this pouch (and the "רמז" hint button anchored just below
+// it, see HintSystem.ts) read too small there. Exported so HintSystem.ts
+// can size/position itself against this SAME scaled height rather than
+// the raw HOLDER_HEIGHT_PX, keeping the two visually grouped correctly in
+// both modes.
+export const ENVELOP_HOLDER_SCALE = 1.4;
 
 const SLOT_SIZE_PX = 40;
 const SLOT_SPACING_PX = 54;
@@ -66,11 +75,15 @@ export default class CrystalHolder {
   create(depth: number): void {
     this.generateTextures();
 
-    const marginY = isEnvelopScaleMode(this.scene) ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
+    const isEnvelop = isEnvelopScaleMode(this.scene);
+    const marginY = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
     const container = this.scene.add
       .container(HOLDER_MARGIN_X_PX, marginY)
       .setDepth(depth)
       .setScrollFactor(0);
+    if (isEnvelop) {
+      container.setScale(ENVELOP_HOLDER_SCALE);
+    }
 
     const frame = this.scene.add.image(0, 0, HOLDER_FRAME_TEXTURE_KEY).setOrigin(0, 0).setScrollFactor(0);
     container.add(frame);
@@ -143,7 +156,15 @@ export default class CrystalHolder {
     if (!slot || !this.container) {
       return { x: HOLDER_MARGIN_X_PX, y: HOLDER_MARGIN_Y_PX };
     }
-    return { x: this.container.x + slot.frame.x, y: this.container.y + slot.frame.y };
+    // Scales the slot's local offset by the container's own scale (1
+    // normally, ENVELOP_HOLDER_SCALE on short phone-landscape screens —
+    // see create()) rather than a naive x+localX add, so reward-crystal
+    // flights (EquivalencePuzzle.ts/LibraPuzzle.ts/MapFractionPuzzle.ts)
+    // still land exactly on the visually-scaled-up slot in that mode.
+    return {
+      x: this.container.x + slot.frame.x * this.container.scaleX,
+      y: this.container.y + slot.frame.y * this.container.scaleY,
+    };
   }
 
   destroy(): void {

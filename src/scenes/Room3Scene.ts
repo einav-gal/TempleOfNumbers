@@ -131,7 +131,16 @@ export default class Room3Scene extends Phaser.Scene {
 
     this.generatePedestalTexture();
     this.pedestalImage = this.add.image(0, 0, PEDESTAL_TEXTURE_KEY).setOrigin(0.5).setDepth(PEDESTAL_DEPTH);
-    this.pedestalImage.postFX?.addGlow(PEDESTAL_GLOW_COLOR, PEDESTAL_GLOW_OUTER_STRENGTH, 0, false, 0.1, 6);
+    // Both postFX glows below skipped on short phone-landscape screens
+    // (ENVELOP scale mode) — reported as a large, broken-looking
+    // horizontal light streak on a real device there (same fix as
+    // PinkCrystal.ts/HeartOfTheTemple.ts's own glows — see PinkCrystal.ts's
+    // comment for the underlying WebGL postFX-vs-ENVELOP theory). Neither
+    // has a non-FX fallback layer, so they simply go without a glow in
+    // that one mode rather than rendering broken.
+    if (!isEnvelopScaleMode(this)) {
+      this.pedestalImage.postFX?.addGlow(PEDESTAL_GLOW_COLOR, PEDESTAL_GLOW_OUTER_STRENGTH, 0, false, 0.1, 6);
+    }
     this.pedestalShadow = this.add.graphics().setDepth(PEDESTAL_SHADOW_DEPTH);
 
     // Sharp and fully opaque — the soft glow behind it (and its own gentle
@@ -142,7 +151,9 @@ export default class Room3Scene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(BIG_CRYSTAL_DEPTH)
       .setAlpha(1);
-    const crystalGlowFx = this.bigCrystalImage.postFX?.addGlow(BIG_CRYSTAL_GLOW_COLOR, 0, 0, false, 0.15, 10);
+    const crystalGlowFx = isEnvelopScaleMode(this)
+      ? undefined
+      : this.bigCrystalImage.postFX?.addGlow(BIG_CRYSTAL_GLOW_COLOR, 0, 0, false, 0.15, 10);
     if (crystalGlowFx) {
       this.bigCrystalGlowTween = this.tweens.add({
         targets: crystalGlowFx,

@@ -7,6 +7,7 @@ import ringMiddleFrontUrl from '../../assets/images/central-hall/Rings/Ring_Midd
 import ringFrontRearUrl from '../../assets/images/central-hall/Rings/Ring-front--rear.png';
 import ringFrontFrontUrl from '../../assets/images/central-hall/Rings/Ring-front-front.png';
 import { CrystalId, areAllCrystalsPlaced } from './GameState';
+import { isEnvelopScaleMode } from './scaleMode';
 
 const CRYSTAL_KEY = 'heart-crystal';
 const RING_BACK_REAR_KEY = 'heart-ring-back-rear';
@@ -245,7 +246,16 @@ export default class HeartOfTheTemple {
     this.crystal.on(Phaser.Input.Events.POINTER_OVER, () => this.setHovered(true));
     this.crystal.on(Phaser.Input.Events.POINTER_OUT, () => this.setHovered(false));
 
-    this.glowFx = this.crystal.postFX?.addGlow(0x66bbff, 2.5, 0, false, 0.08, 20);
+    // Skipped on short phone-landscape screens (ENVELOP scale mode) —
+    // reported as a large, broken-looking horizontal light streak shooting
+    // out of the crystal on a real device there (same fix as
+    // PinkCrystal.ts's own rim glow — see its comment for the underlying
+    // WebGL postFX-vs-ENVELOP theory). This crystal has no non-FX glow
+    // layer of its own, so the crystal simply goes without a glow in that
+    // one mode, rather than rendering broken.
+    this.glowFx = isEnvelopScaleMode(this.scene)
+      ? undefined
+      : this.crystal.postFX?.addGlow(0x66bbff, 2.5, 0, false, 0.08, 20);
     if (this.glowFx) {
       this.glowTween = this.scene.tweens.add({
         targets: this.glowFx,

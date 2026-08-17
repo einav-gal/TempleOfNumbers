@@ -761,7 +761,15 @@ export default class MapFractionPuzzle {
     }
     // Reuses this project's established postFX glow technique (see the
     // Central Hall crystal's pulsing glow) — a steady green "solved" glow.
-    const fx = this.mainImage.postFX?.addGlow(SOLVED_GLOW_COLOR, 0, 0, false, 0.1, 24);
+    // Skipped on short phone-landscape screens (ENVELOP scale mode) —
+    // reported as a large, broken-looking light streak on a real device
+    // there (same fix as PinkCrystal.ts/HeartOfTheTemple.ts's own glows —
+    // see PinkCrystal.ts's comment for the underlying WebGL postFX-vs-
+    // ENVELOP theory); the map simply goes without this glow in that one
+    // mode rather than rendering broken.
+    const fx = isEnvelopScaleMode(this.scene)
+      ? undefined
+      : this.mainImage.postFX?.addGlow(SOLVED_GLOW_COLOR, 0, 0, false, 0.1, 24);
     if (!fx) {
       return;
     }
