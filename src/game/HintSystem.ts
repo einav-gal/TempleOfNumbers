@@ -9,7 +9,13 @@ import {
   areAllCrystalsPlaced,
 } from './GameState';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
-import { HOLDER_MARGIN_X_PX, HOLDER_MARGIN_Y_PX, HOLDER_HEIGHT_PX, ENVELOP_HOLDER_SCALE } from './CrystalHolder';
+import {
+  HOLDER_MARGIN_X_PX,
+  HOLDER_MARGIN_Y_PX,
+  HOLDER_HEIGHT_PX,
+  ENVELOP_HOLDER_SCALE,
+  ENVELOP_HOLDER_MARGIN_X_PX,
+} from './CrystalHolder';
 
 interface HintDefinition {
   id: string;
@@ -193,7 +199,8 @@ export default class HintSystem {
     const holderHeight = HOLDER_HEIGHT_PX * (isEnvelop ? ENVELOP_HOLDER_SCALE : 1);
     const buttonHalf = (BUTTON_SIZE_PX / 2) * (isEnvelop ? ENVELOP_BUTTON_SCALE : 1);
     const buttonY = holderTopMargin + holderHeight + BUTTON_GAP_BELOW_HOLDER_PX + buttonHalf;
-    this.buttonContainer?.setPosition(HOLDER_MARGIN_X_PX + buttonHalf, buttonY);
+    const marginX = isEnvelop ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
+    this.buttonContainer?.setPosition(marginX + buttonHalf, buttonY);
 
     if (this.popupContainer) {
       this.popupContainer.setPosition(width / 2, height / 2);

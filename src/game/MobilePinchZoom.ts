@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isEnvelopScaleMode } from './scaleMode';
 
 // TEMPORARY diagnostic — logs pointer/world/camera state and the
 // clicked object's name on every pointerdown, to verify clicks actually
@@ -10,8 +11,26 @@ const DEBUG_LOG_CLICKS = false;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 2.5;
 const SUPPRESS_CLICKS_COOLDOWN_MS = 150; // within the requested 120-180ms range
-const ZOOM_ACTIVE_THRESHOLD = 1.05;
+// Multiplier ON TOP of the resting zoom (1 on desktop/tablet FIT,
+// ENVELOP_BASE_ZOOM below on short phone-landscape) that isZoomedOrPanned()
+// treats as "still at rest" — kept as a ratio, not an absolute value, so
+// it stays meaningful regardless of which baseline is active.
+const ZOOM_ACTIVE_THRESHOLD_RATIO = 1.05;
 const PAN_ACTIVE_THRESHOLD_PX = 4;
+// The camera's own resting zoom on short phone-landscape screens (ENVELOP
+// scale mode) — requested after real-device feedback that the game
+// looked too small there, specifically to crop in further from the
+// sides. A uniform camera zoom can't crop ONLY the sides: on this
+// project's wide-landscape-phone case, ENVELOP's own cover-scale already
+// matches the viewport WIDTH exactly (zero horizontal crop) while
+// cropping some height to compensate, so zooming in further from here
+// necessarily crops MORE off the top/bottom too, proportionally — there
+// is no way to only affect the sides. Deliberately modest (12%) to keep
+// that extra vertical crop small, since this project's per-scene UI was
+// tuned against ENVELOP's existing ~190bg-px top/bottom safe margin
+// (see scaleMode.ts) — anything reported still clipped after this should
+// be nudged further into that margin, not fixed by reverting this value.
+const ENVELOP_BASE_ZOOM = 1.12;
 // Safety-net only: normally suppressClicks clears itself within
 // SUPPRESS_CLICKS_COOLDOWN_MS of onTouchEnd() seeing zero remaining
 // touches (see stopSuppressingClicksAfterCooldown()). But this class's
@@ -213,13 +232,18 @@ export default class MobilePinchZoom {
    */
   isZoomedOrPanned(): boolean {
     const camera = this.scene.cameras.main;
-    if (camera.zoom > ZOOM_ACTIVE_THRESHOLD) {
+    if (camera.zoom > this.getBaseZoom() * ZOOM_ACTIVE_THRESHOLD_RATIO) {
       return true;
     }
     return (
       Math.abs(camera.scrollX - this.defaultScrollX) > PAN_ACTIVE_THRESHOLD_PX ||
       Math.abs(camera.scrollY - this.defaultScrollY) > PAN_ACTIVE_THRESHOLD_PX
     );
+  }
+
+  /** The camera's own resting zoom for the current scale mode — ENVELOP_BASE_ZOOM on short phone-landscape screens, MIN_ZOOM (1) everywhere else. The floor pinch-out can't go below, and what "at rest" means for isZoomedOrPanned()/the reset button. */
+  private getBaseZoom(): number {
+    return isEnvelopScaleMode(this.scene) ? ENVELOP_BASE_ZOOM : MIN_ZOOM;
   }
 
   /**
@@ -379,7 +403,7 @@ export default class MobilePinchZoom {
 
     if (this.pinchPrevDistance > 0) {
       const ratio = newDistance / this.pinchPrevDistance;
-      const newZoom = Phaser.Math.Clamp(camera.zoom * ratio, MIN_ZOOM, MAX_ZOOM);
+      const newZoom = Phaser.Math.Clamp(camera.zoom * ratio, this.getBaseZoom(), MAX_ZOOM);
 
       // Keep the world point that was under the fingers a moment ago
       // anchored at the SAME screen position — using Phaser's own
@@ -459,7 +483,7 @@ export default class MobilePinchZoom {
   private resetCameraAndGestureState(): void {
     this.abortGesture();
     const camera = this.scene.cameras.main;
-    camera.setZoom(MIN_ZOOM);
+    camera.setZoom(this.getBaseZoom());
     camera.centerOn(this.scene.scale.width / 2, this.scene.scale.height / 2);
     this.defaultScrollX = camera.scrollX;
     this.defaultScrollY = camera.scrollY;

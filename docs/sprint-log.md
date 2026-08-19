@@ -1888,3 +1888,59 @@ earlier size bumps.
 - `npm run build` (`tsc && vite build`) passes with no errors.
 - Not verified on a live device (no such access in this environment) —
   the user will re-test on her own phone after this deploys.
+
+---
+
+## Sprint — Mobile: Crop In From the Sides Too, Pull Top-Left UI Further In
+
+### Status
+
+Completed
+
+### Goal
+
+Follow-up: the game still looked too small on mobile. Requested fix:
+zoom in further so the sides get cropped too (not just top/bottom, which
+ENVELOP scale mode already crops), and pull the hint button/`CrystalHolder`
+pouch a bit further in from the corner.
+
+### Completed
+
+- **`src/game/MobilePinchZoom.ts` — `ENVELOP_BASE_ZOOM` (1.12):** the
+  camera's own resting zoom is now this value on short phone-landscape
+  screens (was always exactly 1 everywhere). Important physical
+  constraint, called out explicitly in the code comment: a uniform camera
+  zoom can't crop *only* the sides — on this project's wide-landscape-
+  phone case, ENVELOP's own cover-scale already matches the viewport
+  width exactly (zero horizontal crop) while cropping some height to
+  compensate, so zooming in further necessarily crops more off the
+  top/bottom too, proportionally. Kept deliberately modest (12%) for that
+  reason, since every scene's UI was tuned against ENVELOP's existing
+  ~190bg-px top/bottom safe margin. New `getBaseZoom()` helper (`1` on
+  FIT, `ENVELOP_BASE_ZOOM` on ENVELOP) now backs the pinch-out clamp
+  floor, `resetCameraAndGestureState()`'s resting zoom, and
+  `isZoomedOrPanned()`'s "at rest" check — the latter's threshold
+  (`ZOOM_ACTIVE_THRESHOLD_RATIO`, renamed from `ZOOM_ACTIVE_THRESHOLD`) is
+  now a multiplier *on top of* the base zoom rather than an absolute
+  value, so it stays meaningful at either baseline.
+- **`src/game/CrystalHolder.ts`/`src/game/HintSystem.ts` — pulled in
+  further from the corner:** new exported `ENVELOP_HOLDER_MARGIN_X_PX`
+  (40, vs. `HOLDER_MARGIN_X_PX`'s 18) used as `CrystalHolder.ts`'s own X
+  anchor in ENVELOP mode; `HintSystem.ts` imports and reuses the same
+  constant for its button, so the two stay aligned with each other.
+
+### Out of Scope (respected)
+
+- Desktop/tablet FIT-mode zoom/positioning — completely untouched, gated
+  on `isEnvelopScaleMode()`.
+- Did not touch any other scene's UI margins beyond these two components
+  — the user asked specifically about the hint button/pouch.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device — flagged to the user that the extra
+  zoom-in also crops a bit more off the top/bottom (an unavoidable
+  physical trade-off, not a bug), so it's worth re-checking that nothing
+  important is now clipped there, in addition to confirming the sides/UI
+  look right.

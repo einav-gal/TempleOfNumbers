@@ -26,6 +26,13 @@ export const HOLDER_MARGIN_Y_PX = 18;
 // the raw HOLDER_HEIGHT_PX, keeping the two visually grouped correctly in
 // both modes.
 export const ENVELOP_HOLDER_SCALE = 1.4;
+// Pulled in a bit further from the left edge than HOLDER_MARGIN_X_PX,
+// specifically in ENVELOP mode — real-device feedback that the pouch (and
+// the hint button anchored below it) sat too close to the corner once the
+// screen was also cropped in from the sides (see MobilePinchZoom.ts's
+// ENVELOP_BASE_ZOOM). Exported for HintSystem.ts to reuse as its own X
+// anchor, so the two stay aligned.
+export const ENVELOP_HOLDER_MARGIN_X_PX = 40;
 
 const SLOT_SIZE_PX = 40;
 const SLOT_SPACING_PX = 54;
@@ -76,9 +83,10 @@ export default class CrystalHolder {
     this.generateTextures();
 
     const isEnvelop = isEnvelopScaleMode(this.scene);
+    const marginX = isEnvelop ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
     const marginY = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
     const container = this.scene.add
-      .container(HOLDER_MARGIN_X_PX, marginY)
+      .container(marginX, marginY)
       .setDepth(depth)
       .setScrollFactor(0);
     if (isEnvelop) {

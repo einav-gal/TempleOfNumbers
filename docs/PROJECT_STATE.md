@@ -2748,6 +2748,13 @@ it (don't just append below it) whenever one of these systems changes.
   (`EquivalencePuzzle.ts`/`LibraPuzzle.ts`/`MapFractionPuzzle.ts`) would
   have landed at the wrong (unscaled) spot in ENVELOP mode otherwise; now
   multiplies by `container.scaleX`/`scaleY`, correct at any scale.
+  Following that, both were also pulled in further from the left edge in
+  ENVELOP mode specifically — real-device feedback that they sat too
+  close to the corner once the screen was also cropped in from the sides
+  (see `MobilePinchZoom.ts`'s `ENVELOP_BASE_ZOOM` below). `CrystalHolder.ts`
+  exports `ENVELOP_HOLDER_MARGIN_X_PX` (40, vs. `HOLDER_MARGIN_X_PX`'s 18)
+  as its own X anchor in that mode; `HintSystem.ts` imports and reuses the
+  same constant for its button, so the two stay aligned.
   handler and pop `openPopup()` open at the same time this popup closes
   via the scene-wide dismiss listener. Reads the shared registry via
   `GameState.ts` for prerequisites/discovery; its only other coupling is
@@ -2990,6 +2997,23 @@ it (don't just append below it) whenever one of these systems changes.
   `scene.input.on(...)` listeners — on `scene.input.enabled`, which this
   class also uses to suppress clicks during a gesture; building gesture
   tracking on the same flag it disables would deadlock it.
+  - **Resting zoom (`getBaseZoom()`):** `1` on desktop/tablet FIT, but
+    `ENVELOP_BASE_ZOOM` (1.12) on short phone-landscape screens — real
+    -device feedback that the game looked too small there, specifically
+    wanting the sides cropped in further. A uniform camera zoom can't
+    crop *only* the sides: on this project's wide-landscape-phone case,
+    ENVELOP's own cover-scale already matches the viewport width exactly
+    (zero horizontal crop) while cropping some height to compensate, so
+    zooming in further necessarily crops more off the top/bottom too,
+    proportionally — kept deliberately modest (12%) for that reason,
+    since every scene's UI was tuned against ENVELOP's existing
+    ~190bg-px top/bottom safe margin (`scaleMode.ts`). This is the floor
+    pinch-out can't go below (`updatePinch()`'s clamp), what
+    `resetCameraAndGestureState()` snaps back to, and what
+    `isZoomedOrPanned()` treats as "at rest" (compared via
+    `ZOOM_ACTIVE_THRESHOLD_RATIO`, a multiplier on top of the base zoom
+    rather than an absolute value, so it stays meaningful at either
+    baseline).
   - **Only a genuine two-finger touch is ever a camera gesture** — pinch
     (distance change) and pan (midpoint translation) together, in one
     `updatePinch()` pass. A single finger is never tracked/suppressed by
