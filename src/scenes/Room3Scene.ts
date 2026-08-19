@@ -4,7 +4,7 @@ import bigCrystalImageUrl from '../../assets/images/Room3/green-crystal.png';
 import Doorway from '../game/Doorway';
 import CrystalHolder from '../game/CrystalHolder';
 import MapFractionPuzzle from '../game/MapFractionPuzzle';
-import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from '../game/scaleMode';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 
 const BACKGROUND_KEY = 'room3-background';
@@ -209,7 +209,13 @@ export default class Room3Scene extends Phaser.Scene {
       return;
     }
 
-    this.backgroundScale = Math.max(width / this.background.width, height / this.background.height);
+    // On short phone-landscape screens (ENVELOP), boosted a bit further
+    // (see ENVELOP_EXTRA_ZOOM_FACTOR) — real-device feedback that
+    // everything looked too small/distant there. World content only;
+    // screen-fixed UI (CrystalHolder) is untouched by this.
+    this.backgroundScale =
+      Math.max(width / this.background.width, height / this.background.height) *
+      (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
     this.background.setScale(this.backgroundScale).setPosition(width / 2, height / 2);
 
     const toScreenX = (bgX: number) =>

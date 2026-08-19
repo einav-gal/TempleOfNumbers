@@ -28,6 +28,7 @@ import {
   setWallWheelOpen,
 } from '../game/GameState';
 import { createRtlText } from '../game/rtlText';
+import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
 import handleUrl from '../../assets/images/central-hall/handle/handle.png';
 // Photoshop-matched statue variant, hand-graded to match the background's
 // lighting/contrast/warmth. Replaces the earlier procedurally-blended
@@ -442,11 +443,14 @@ export default class CentralHallScene extends Phaser.Scene {
     }
 
     // Cover the window: scale proportionally so the image always fills it,
-    // cropping the overflow edges instead of distorting.
-    this.backgroundScale = Math.max(
-      width / this.background.width,
-      height / this.background.height,
-    );
+    // cropping the overflow edges instead of distorting. On short
+    // phone-landscape screens (ENVELOP), boosted a bit further (see
+    // ENVELOP_EXTRA_ZOOM_FACTOR) — real-device feedback that everything
+    // looked too small/distant there. World content only; screen-fixed UI
+    // (CrystalHolder, HintSystem, popups) is untouched by this.
+    this.backgroundScale =
+      Math.max(width / this.background.width, height / this.background.height) *
+      (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
     this.background
       .setScale(this.backgroundScale)
       .setPosition(width / 2, height / 2);

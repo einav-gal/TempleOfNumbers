@@ -2984,6 +2984,27 @@ it (don't just append below it) whenever one of these systems changes.
   helpers; a small always-present HTML `#fullscreen-toggle` button
   (top-right) triggers it — never auto-requested on a non-gesture code
   path.
+- **Extra world-content zoom on ENVELOP (`scaleMode.ts`'s
+  `ENVELOP_EXTRA_ZOOM_FACTOR`, 1.12):** each interactive scene's own
+  `backgroundScale` (`CentralHallScene.ts`/`PinkRoomScene.ts`/
+  `LibraRoomScene.ts`/`Room3Scene.ts` — the same four with a
+  `MobilePinchZoom` instance) is multiplied by this factor specifically
+  in ENVELOP mode, on top of the usual `Math.max(width/bg.width,
+  height/bg.height)` cover-scale — real-device feedback that the game
+  looked too small/distant on a short phone-landscape screen, wanting
+  the sides cropped in further (ENVELOP's own cover-scale already crops
+  zero off the sides on a wide viewport, matching the screen width
+  exactly). Only affects *world*-anchored content (background, crystal,
+  rings, doorways — everything positioned via that scene's own
+  `toScreenX`/`toScreenY`); screen-fixed UI (`CrystalHolder`,
+  `HintSystem`, every popup) is completely unaffected, since it never
+  reads `backgroundScale` at all. A uniform scale-up like this can't crop
+  *only* the sides, though — it enlarges world content symmetrically
+  from its own center, so anything already near the top/bottom edge of
+  ENVELOP's existing `ENVELOP_TOP`/`BOTTOM_SAFE_MARGIN_PX` gets pushed
+  further out too, proportionally; kept modest (12%) for that reason.
+  `HiddenPassageScene`/`LibraStaircaseScene` (non-interactive scripted
+  camera fly-throughs, no `MobilePinchZoom`) are deliberately untouched.
 - **Pinch-to-zoom/pan (`src/game/MobilePinchZoom.ts`):** one shared class,
   one instance created per interactive scene (`CentralHallScene`,
   `PinkRoomScene`, `LibraRoomScene`, `Room3Scene` — deliberately **not**
@@ -2997,23 +3018,20 @@ it (don't just append below it) whenever one of these systems changes.
   `scene.input.on(...)` listeners — on `scene.input.enabled`, which this
   class also uses to suppress clicks during a gesture; building gesture
   tracking on the same flag it disables would deadlock it.
-  - **Resting zoom (`getBaseZoom()`):** `1` on desktop/tablet FIT, but
-    `ENVELOP_BASE_ZOOM` (1.12) on short phone-landscape screens — real
-    -device feedback that the game looked too small there, specifically
-    wanting the sides cropped in further. A uniform camera zoom can't
-    crop *only* the sides: on this project's wide-landscape-phone case,
-    ENVELOP's own cover-scale already matches the viewport width exactly
-    (zero horizontal crop) while cropping some height to compensate, so
-    zooming in further necessarily crops more off the top/bottom too,
-    proportionally — kept deliberately modest (12%) for that reason,
-    since every scene's UI was tuned against ENVELOP's existing
-    ~190bg-px top/bottom safe margin (`scaleMode.ts`). This is the floor
-    pinch-out can't go below (`updatePinch()`'s clamp), what
-    `resetCameraAndGestureState()` snaps back to, and what
-    `isZoomedOrPanned()` treats as "at rest" (compared via
-    `ZOOM_ACTIVE_THRESHOLD_RATIO`, a multiplier on top of the base zoom
-    rather than an absolute value, so it stays meaningful at either
-    baseline).
+  - **Resting zoom is always exactly `MIN_ZOOM` (1), on every scale
+    mode.** A short-lived attempt at a higher ENVELOP-only resting zoom
+    (to crop in further from the sides) was reverted: Phaser bakes
+    `camera.zoom` into every object's render matrix regardless of
+    `scrollFactor` (`camMatrix.copyFrom(camera.matrix)` in
+    `MultiPipeline.js`, applied before the separate scroll-cancellation
+    step) — so a `scrollFactor(0)` "screen-fixed" object is only
+    *scroll*-independent, not *zoom*-independent, and shifted/scaled
+    right along with that camera zoom. That broke `CrystalHolder`'s and
+    `HintSystem`'s corner-anchored positioning project-wide (reported as
+    both cropped in every room). The actual fix for "crop in from the
+    sides" lives in each scene's own `backgroundScale` instead — see
+    `ENVELOP_EXTRA_ZOOM_FACTOR` below — which only affects *world*-
+    anchored content, leaving screen-fixed UI untouched.
   - **Only a genuine two-finger touch is ever a camera gesture** — pinch
     (distance change) and pan (midpoint translation) together, in one
     `updatePinch()` pass. A single finger is never tracked/suppressed by

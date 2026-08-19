@@ -1944,3 +1944,74 @@ pouch a bit further in from the corner.
   physical trade-off, not a bug), so it's worth re-checking that nothing
   important is now clipped there, in addition to confirming the sides/UI
   look right.
+
+**Superseded by the very next sprint below** — the `ENVELOP_BASE_ZOOM`
+camera-zoom approach turned out to be the actual cause of the hint
+button/`CrystalHolder` pouch showing up cropped in every room (reported
+immediately after this shipped). See below for the root cause and the
+corrected approach; `ENVELOP_HOLDER_MARGIN_X_PX` (the pull-in-from-the-
+corner fix) is unaffected and still stands.
+
+---
+
+## Sprint — Fixed the Real Cause of the Mobile Crop, Redone Correctly
+
+### Status
+
+Completed
+
+### Goal
+
+Immediate regression report after the previous sprint shipped: the hint
+button was cropped at the screen edge, and the `CrystalHolder` pouch was
+now cropped in every room, not just Central Hall.
+
+### Completed
+
+- **Root cause found:** the previous sprint's `ENVELOP_BASE_ZOOM`
+  approach set the camera's *resting* zoom above 1 on ENVELOP. Checked
+  Phaser's own render pipeline (`MultiPipeline.js`) to confirm: it copies
+  `camera.matrix` (which bakes in `camera.zoom`) into the render matrix
+  for *every* object *unconditionally*, and only the separate scroll
+  contribution is scaled by `scrollFactorX`/`scrollFactorY`. So a
+  `scrollFactor(0)` "screen-fixed" object — `CrystalHolder`'s pouch,
+  `HintSystem`'s button, every popup — is only ever *scroll*-independent,
+  never *zoom*-independent, and shifts/scales right along with any
+  camera zoom. Raising the resting zoom broke every screen-fixed UI
+  element's careful corner-anchored positioning, project-wide, the
+  instant it landed.
+- **`src/game/MobilePinchZoom.ts`:** fully reverted to its pre-sprint
+  state — resting zoom is `MIN_ZOOM` (1) again on every scale mode;
+  removed `ENVELOP_BASE_ZOOM`, `getBaseZoom()`, and the
+  `ZOOM_ACTIVE_THRESHOLD_RATIO` rename (back to `ZOOM_ACTIVE_THRESHOLD`).
+  The `MAX_SUPPRESS_CLICKS_MS` stuck-click safety net from the prior
+  sprint is unrelated and was left in place.
+- **`src/game/scaleMode.ts` — the corrected approach:** new
+  `ENVELOP_EXTRA_ZOOM_FACTOR` (1.12, same magnitude as before, just
+  applied differently). Each of the four interactive scenes
+  (`CentralHallScene.ts`/`PinkRoomScene.ts`/`LibraRoomScene.ts`/
+  `Room3Scene.ts`) now multiplies its own `backgroundScale` by this
+  factor in ENVELOP mode, on top of the usual cover-scale formula —
+  affecting only *world*-anchored content (background, crystal, rings,
+  doorways, everything positioned via that scene's own `toScreenX`/
+  `toScreenY`), never touching `camera.zoom` at all, so screen-fixed UI
+  is completely unaffected this time. Same physical trade-off as before
+  still applies and is documented: a uniform scale-up can't crop only
+  the sides — it also pushes content near the existing top/bottom safe
+  margins further out, proportionally.
+
+### Out of Scope (respected)
+
+- `HiddenPassageScene.ts`/`LibraStaircaseScene.ts` (non-interactive
+  scripted camera fly-throughs, no `MobilePinchZoom` instance) —
+  deliberately left untouched, consistent with every other
+  ENVELOP-specific mobile fix this session.
+- `ENVELOP_HOLDER_MARGIN_X_PX` (the hint button/pouch corner pull-in from
+  the previous sprint) — untouched, still correct on its own.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device — this correction directly addresses the
+  reported regression (cropped button/pouch), but should be re-checked
+  alongside the sides/top/bottom crop trade-off already flagged.

@@ -26,3 +26,31 @@ export function isEnvelopScaleMode(scene: Phaser.Scene): boolean {
  */
 export const ENVELOP_TOP_SAFE_MARGIN_PX = 190;
 export const ENVELOP_BOTTOM_SAFE_MARGIN_PX = 190;
+
+/**
+ * Extra multiplier applied on top of each interactive scene's own
+ * background cover-scale (`Math.max(width/bg.width, height/bg.height)`),
+ * specifically in ENVELOP mode — requested after real-device feedback
+ * that the game looked too small/distant on a short phone-landscape
+ * screen, wanting the sides cropped in further too (ENVELOP's own
+ * cover-scale already crops zero off the sides on a wide viewport, using
+ * only enough scale to match the screen width exactly).
+ *
+ * Deliberately NOT done via `camera.setZoom()`: Phaser bakes camera zoom
+ * into every object's render matrix regardless of `scrollFactor`, so a
+ * `scrollFactor(0)` "screen-fixed" object (CrystalHolder, HintSystem's
+ * button, every popup) is NOT actually zoom-independent — only scroll-
+ * independent — and would shift/scale right along with a camera zoom,
+ * breaking their careful corner-anchored positioning. Boosting each
+ * scene's own `backgroundScale` instead only affects *world*-anchored
+ * content (background, crystal, rings, doorways — everything positioned
+ * via that scene's own `toScreenX`/`toScreenY`), leaving screen-fixed UI
+ * completely untouched.
+ *
+ * A uniform scale-up like this can't crop ONLY the sides, though: it
+ * enlarges world content symmetrically from its own center, so anything
+ * already near the top/bottom edge of ENVELOP's existing
+ * ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX gets pushed further out too,
+ * proportionally. Kept modest (12%) for exactly that reason.
+ */
+export const ENVELOP_EXTRA_ZOOM_FACTOR = 1.12;

@@ -5,6 +5,7 @@ import LibraPuzzle from '../game/LibraPuzzle';
 import CrystalHolder from '../game/CrystalHolder';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 import { getLibraRoomState } from '../game/GameState';
+import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
 
 const BACKGROUND_KEY = 'libra-room-background';
 const PUZZLE_DEPTH = 5;
@@ -138,8 +139,14 @@ export default class LibraRoomScene extends Phaser.Scene {
     }
 
     // Cover the window: proportional fill, cropping overflow instead of
-    // stretching — same convention as every other room's background.
-    this.backgroundScale = Math.max(width / this.background.width, height / this.background.height);
+    // stretching — same convention as every other room's background. On
+    // short phone-landscape screens (ENVELOP), boosted a bit further (see
+    // ENVELOP_EXTRA_ZOOM_FACTOR) — real-device feedback that everything
+    // looked too small/distant there. World content only; screen-fixed UI
+    // (CrystalHolder) is untouched by this.
+    this.backgroundScale =
+      Math.max(width / this.background.width, height / this.background.height) *
+      (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
     this.background.setScale(this.backgroundScale).setPosition(width / 2, height / 2);
 
     const toScreenX = (bgX: number) =>
