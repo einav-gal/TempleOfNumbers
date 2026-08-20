@@ -2732,31 +2732,42 @@ it (don't just append below it) whenever one of these systems changes.
   underneath in world space — this popup is screen-centered, near where
   the Heart of the Temple's crystal sits, so a click on it (e.g. the
   close-hint line) could otherwise also reach the crystal's own click
-  handler. Confirmed still too small on a real device (button + crystal
-  pouch), so both now scale up as a whole specifically in ENVELOP mode:
-  `HintSystem.ts`'s button container gets `ENVELOP_BUTTON_SCALE` (1.3),
-  `CrystalHolder.ts`'s own container gets its exported
-  `ENVELOP_HOLDER_SCALE` (1.4) — both growing down-right from their fixed
-  top-left anchor, never re-baked into the generated textures. `layout()`
-  computes the button's Y position from the holder's *effective* (scaled)
-  height, not the raw `HOLDER_HEIGHT_PX` constant, so the two stay
-  correctly grouped in both modes. Fixing this exposed a real, previously
-  latent bug in `CrystalHolder.getSlotScreenPosition()`: it added the
-  slot's local offset to the container's position with no scale factor,
-  which happened to work only because the container was always at
-  scale 1 before now — reward-crystal flights
+  handler and pop `openPopup()` open at the same time this popup closes
+  via the scene-wide dismiss listener. Confirmed still too small on a
+  real device (button + crystal pouch), so both now scale up as a whole
+  specifically in ENVELOP mode: `HintSystem.ts`'s button container gets
+  `ENVELOP_BUTTON_SCALE` (1.3), `CrystalHolder.ts`'s own container gets
+  its exported `ENVELOP_HOLDER_SCALE` (1.4) — both growing down-right
+  from their fixed top-left anchor, never re-baked into the generated
+  textures. `layout()` computes the button's Y position from the
+  holder's *effective* (scaled) height, not the raw `HOLDER_HEIGHT_PX`
+  constant, so the two stay correctly grouped in both modes. Fixing this
+  exposed a real, previously latent bug in
+  `CrystalHolder.getSlotScreenPosition()`: it added the slot's local
+  offset to the container's position with no scale factor, which
+  happened to work only because the container was always at scale 1
+  before now — reward-crystal flights
   (`EquivalencePuzzle.ts`/`LibraPuzzle.ts`/`MapFractionPuzzle.ts`) would
   have landed at the wrong (unscaled) spot in ENVELOP mode otherwise; now
   multiplies by `container.scaleX`/`scaleY`, correct at any scale.
   Following that, both were also pulled in further from the left edge in
   ENVELOP mode specifically — real-device feedback that they sat too
-  close to the corner once the screen was also cropped in from the sides
-  (see `MobilePinchZoom.ts`'s `ENVELOP_BASE_ZOOM` below). `CrystalHolder.ts`
-  exports `ENVELOP_HOLDER_MARGIN_X_PX` (40, vs. `HOLDER_MARGIN_X_PX`'s 18)
-  as its own X anchor in that mode; `HintSystem.ts` imports and reuses the
-  same constant for its button, so the two stay aligned.
-  handler and pop `openPopup()` open at the same time this popup closes
-  via the scene-wide dismiss listener. Reads the shared registry via
+  close to the corner once the screen was also cropped in from the sides.
+  `CrystalHolder.ts` exports `ENVELOP_HOLDER_MARGIN_X_PX` (40, vs.
+  `HOLDER_MARGIN_X_PX`'s 18) as its own X anchor in that mode;
+  `HintSystem.ts` imports and reuses the same constant for its button, so
+  the two stay aligned. A further real bug surfaced when the pouch was
+  then reported invisible in *every* room: `CrystalHolder.ts` only ever
+  applied its position/scale once, in `create()` — if the Scale
+  Manager's mode changed afterward (a real, documented risk on mobile
+  browsers, whose reported viewport shape can be unreliable right at page
+  load), the pouch stayed frozen at whatever the first, possibly-wrong
+  mode computed, while `HintSystem.ts`'s own `layout()` (already
+  re-invoked on every resize) self-corrected. `CrystalHolder.ts` now has
+  its own `layout()` doing the same position/scale work, called from
+  every owning scene's own resize-triggered `layout()` (`CentralHallScene`
+  /`PinkRoomScene`/`LibraRoomScene`/`Room3Scene`), the same pattern
+  `HintSystem.ts` already used. Reads the shared registry via
   `GameState.ts` for prerequisites/discovery; its only other coupling is
   the imported `CrystalHolder.ts` layout constants above, no dependency
   on `CentralHallScene`'s own internals.
@@ -3101,26 +3112,30 @@ it (don't just append below it) whenever one of these systems changes.
   pointer/world/camera state and the hit object's name on every
   pointerdown — now verified on a real device and flipped back to `false`
   (left in the file, off, in case it's needed again).
-- **postFX Glow skipped in ENVELOP mode:** reported from a real
-  short-landscape phone — every crystal/pedestal using
-  `image.postFX?.addGlow(...)` (`PinkCrystal.ts`, `HeartOfTheTemple.ts`,
-  `Room3Scene.ts`'s pedestal + big crystal, `MapFractionPuzzle.ts`'s
-  solved-map glow) rendered as a large, broken-looking horizontal light
-  streak shooting sideways off-screen, in that crystal's own tint color,
-  instead of a soft halo. Working theory: the WebGL Glow FX pipeline's
-  render-target resolution mismatches the real canvas in ENVELOP mode,
-  where the actual rendered viewport aspect diverges furthest from the
-  fixed 1536×1024 design canvas (worst on a landscape phone) — regular
-  (non-FX) sprites are unaffected, only objects with this specific
-  postFX. Fixed by skipping `addGlow()` entirely when
-  `isEnvelopScaleMode(scene)` is true, in all five places above;
-  `PinkCrystal.ts` and `HeartOfTheTemple.ts` still tween the resulting
-  `Phaser.FX.Glow | undefined` field exactly as before (already
-  `if (this.glowFx) {...}`-guarded, so `undefined` is a normal, already-
-  handled state) — `PinkCrystal.ts` keeps its own non-FX `glowBlob` Image
-  layer as the ambient halo on mobile; the other four simply render
-  without this specific glow in that one mode, rather than broken.
-  Desktop/tablet FIT-mode visuals are completely unaffected.
+- **postFX Glow skipped on real mobile devices (`isMobileDevice()`,
+  `scaleMode.ts`):** reported repeatedly from a real phone — every
+  crystal/pedestal using `image.postFX?.addGlow(...)` (`PinkCrystal.ts`,
+  `HeartOfTheTemple.ts`, `Room3Scene.ts`'s pedestal + big crystal,
+  `MapFractionPuzzle.ts`'s solved-map glow) rendered as a large,
+  broken-looking horizontal light streak shooting sideways off-screen,
+  in that crystal's own tint color, instead of a soft halo. Originally
+  gated on `isEnvelopScaleMode()` (a working theory that the WebGL Glow
+  FX pipeline's render-target resolution mismatches the real canvas
+  specifically in ENVELOP mode), but the bug kept recurring on real-
+  device reports even after that shipped — the reporting device's
+  viewport apparently wasn't narrow/short enough to actually trigger
+  ENVELOP at the time, so that gate silently never applied there. Now
+  gated on `isMobileDevice()` instead (checks `scene.sys.game.device.os`
+  for Android/iOS/Windows Phone — a property of the actual device, not
+  the current viewport shape/scale mode), which more reliably points at
+  the real cause: a mobile-GPU/WebGL compatibility issue with Phaser's
+  Glow FX pipeline itself. `PinkCrystal.ts` and `HeartOfTheTemple.ts`
+  still tween the resulting `Phaser.FX.Glow | undefined` field exactly as
+  before (already `if (this.glowFx) {...}`-guarded, so `undefined` is a
+  normal, already-handled state) — `PinkCrystal.ts` keeps its own non-FX
+  `glowBlob` Image layer as the ambient halo on mobile; the other four
+  simply render without this specific glow on mobile, rather than
+  broken. Desktop/tablet visuals are completely unaffected.
 
 ### Room-entry and return flows (shared conventions)
 

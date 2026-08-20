@@ -54,3 +54,26 @@ export const ENVELOP_BOTTOM_SAFE_MARGIN_PX = 190;
  * proportionally. Kept modest (12%) for exactly that reason.
  */
 export const ENVELOP_EXTRA_ZOOM_FACTOR = 1.12;
+
+/**
+ * True on an actual mobile OS (phone or tablet), regardless of current
+ * viewport aspect ratio/orientation — unlike `isEnvelopScaleMode()`,
+ * which only reflects the *current* short-landscape viewport shape.
+ *
+ * Real-device reports of a large, broken-looking light-streak artifact
+ * on every `image.postFX.addGlow(...)` crystal/pedestal (see
+ * `PinkCrystal.ts`/`HeartOfTheTemple.ts`/`Room3Scene.ts`/
+ * `MapFractionPuzzle.ts`) kept recurring even after gating the fix on
+ * `isEnvelopScaleMode()` — the reporting device's viewport apparently
+ * wasn't narrow/short enough to actually trigger ENVELOP mode at the
+ * time, meaning that gate silently never applied there. This points to
+ * the real cause being a mobile-GPU/WebGL compatibility issue with
+ * Phaser's Glow FX pipeline itself, not specifically an ENVELOP-viewport
+ * mismatch — so the glow-skip is now gated on this (actual mobile OS)
+ * instead, catching the bug on any phone/tablet regardless of the
+ * viewport's current aspect ratio or scale mode.
+ */
+export function isMobileDevice(scene: Phaser.Scene): boolean {
+  const os = scene.sys.game.device.os;
+  return os.android || os.iOS || os.windowsPhone;
+}

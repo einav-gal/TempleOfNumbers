@@ -495,6 +495,7 @@ export default class CentralHallScene extends Phaser.Scene {
     );
 
     this.crystalPlacementMode?.layout(toScreenX, toScreenY, this.backgroundScale);
+    this.crystalHolder?.layout();
     this.hintSystem?.layout();
 
     this.intro?.layout(width, height);

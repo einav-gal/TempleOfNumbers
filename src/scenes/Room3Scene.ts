@@ -4,7 +4,12 @@ import bigCrystalImageUrl from '../../assets/images/Room3/green-crystal.png';
 import Doorway from '../game/Doorway';
 import CrystalHolder from '../game/CrystalHolder';
 import MapFractionPuzzle from '../game/MapFractionPuzzle';
-import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
+import {
+  isEnvelopScaleMode,
+  ENVELOP_TOP_SAFE_MARGIN_PX,
+  ENVELOP_EXTRA_ZOOM_FACTOR,
+  isMobileDevice,
+} from '../game/scaleMode';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 
 const BACKGROUND_KEY = 'room3-background';
@@ -131,14 +136,16 @@ export default class Room3Scene extends Phaser.Scene {
 
     this.generatePedestalTexture();
     this.pedestalImage = this.add.image(0, 0, PEDESTAL_TEXTURE_KEY).setOrigin(0.5).setDepth(PEDESTAL_DEPTH);
-    // Both postFX glows below skipped on short phone-landscape screens
-    // (ENVELOP scale mode) — reported as a large, broken-looking
-    // horizontal light streak on a real device there (same fix as
-    // PinkCrystal.ts/HeartOfTheTemple.ts's own glows — see PinkCrystal.ts's
-    // comment for the underlying WebGL postFX-vs-ENVELOP theory). Neither
-    // has a non-FX fallback layer, so they simply go without a glow in
-    // that one mode rather than rendering broken.
-    if (!isEnvelopScaleMode(this)) {
+    // Both postFX glows below skipped on real mobile devices (see
+    // isMobileDevice() — originally gated on ENVELOP scale mode
+    // specifically, but the reported broken-looking horizontal light
+    // streak kept recurring on devices whose viewport didn't actually
+    // trigger ENVELOP, pointing to a genuine mobile-GPU/WebGL Glow FX
+    // compatibility issue, not an ENVELOP-viewport mismatch — see
+    // PinkCrystal.ts's matching comment). Neither has a non-FX fallback
+    // layer, so they simply go without a glow on mobile rather than
+    // rendering broken.
+    if (!isMobileDevice(this)) {
       this.pedestalImage.postFX?.addGlow(PEDESTAL_GLOW_COLOR, PEDESTAL_GLOW_OUTER_STRENGTH, 0, false, 0.1, 6);
     }
     this.pedestalShadow = this.add.graphics().setDepth(PEDESTAL_SHADOW_DEPTH);
@@ -151,7 +158,7 @@ export default class Room3Scene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(BIG_CRYSTAL_DEPTH)
       .setAlpha(1);
-    const crystalGlowFx = isEnvelopScaleMode(this)
+    const crystalGlowFx = isMobileDevice(this)
       ? undefined
       : this.bigCrystalImage.postFX?.addGlow(BIG_CRYSTAL_GLOW_COLOR, 0, 0, false, 0.15, 10);
     if (crystalGlowFx) {
@@ -226,6 +233,7 @@ export default class Room3Scene extends Phaser.Scene {
     const exitScreenX = toScreenX(EXIT_CENTER_X);
     const exitScreenY = toScreenY(EXIT_CENTER_Y);
     this.exit?.layout(exitScreenX, exitScreenY, this.backgroundScale);
+    this.crystalHolder?.layout();
 
     this.overlay?.setSize(width, height);
 

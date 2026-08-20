@@ -3,7 +3,7 @@ import mapBaseImageUrl from '../../assets/images/Room3/map-puzzle-base.png';
 import { createRtlText } from './rtlText';
 import { FONT_FAMILY } from './textStyle';
 import { isRoom3PuzzleSolved, setRoom3PuzzleSolved, setCrystalCollected } from './GameState';
-import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, isMobileDevice } from './scaleMode';
 import type CrystalHolder from './CrystalHolder';
 
 /**
@@ -761,13 +761,14 @@ export default class MapFractionPuzzle {
     }
     // Reuses this project's established postFX glow technique (see the
     // Central Hall crystal's pulsing glow) — a steady green "solved" glow.
-    // Skipped on short phone-landscape screens (ENVELOP scale mode) —
-    // reported as a large, broken-looking light streak on a real device
-    // there (same fix as PinkCrystal.ts/HeartOfTheTemple.ts's own glows —
-    // see PinkCrystal.ts's comment for the underlying WebGL postFX-vs-
-    // ENVELOP theory); the map simply goes without this glow in that one
-    // mode rather than rendering broken.
-    const fx = isEnvelopScaleMode(this.scene)
+    // Skipped on real mobile devices (see isMobileDevice() — originally
+    // gated on ENVELOP scale mode specifically, but the reported broken-
+    // looking light streak kept recurring on devices whose viewport
+    // didn't actually trigger ENVELOP, pointing to a genuine mobile-GPU/
+    // WebGL Glow FX compatibility issue, not an ENVELOP-viewport
+    // mismatch — see PinkCrystal.ts's matching comment); the map simply
+    // goes without this glow on mobile rather than rendering broken.
+    const fx = isMobileDevice(this.scene)
       ? undefined
       : this.mainImage.postFX?.addGlow(SOLVED_GLOW_COLOR, 0, 0, false, 0.1, 24);
     if (!fx) {

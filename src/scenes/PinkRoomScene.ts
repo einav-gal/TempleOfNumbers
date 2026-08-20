@@ -144,6 +144,7 @@ export default class PinkRoomScene extends Phaser.Scene {
     // raw viewport coordinates independently.
     this.puzzle?.layout(toScreenX(CRYSTAL_CENTER_X), toScreenY(CRYSTAL_CENTER_Y), this.backgroundScale);
     this.exit?.layout(toScreenX(EXIT_CENTER_X), toScreenY(EXIT_CENTER_Y), this.backgroundScale);
+    this.crystalHolder?.layout();
 
     this.overlay?.setSize(width, height);
   }

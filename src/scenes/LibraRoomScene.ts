@@ -156,6 +156,7 @@ export default class LibraRoomScene extends Phaser.Scene {
 
     this.exit?.layout(toScreenX(EXIT_CENTER_X), toScreenY(EXIT_CENTER_Y), this.backgroundScale);
     this.puzzle?.layout(toScreenX, toScreenY, this.backgroundScale);
+    this.crystalHolder?.layout();
 
     this.overlay?.setSize(width, height);
   }

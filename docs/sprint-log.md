@@ -2015,3 +2015,69 @@ now cropped in every room, not just Central Hall.
 - Not verified on a live device — this correction directly addresses the
   reported regression (cropped button/pouch), but should be re-checked
   alongside the sides/top/bottom crop trade-off already flagged.
+
+---
+
+## Sprint — Mobile Glow Bug and Crystal-Pouch Visibility, Root-Caused Properly
+
+### Status
+
+Completed
+
+### Goal
+
+The crystal glow streak bug and a "crystal pouch not visible at all"
+report persisted even after the ENVELOP-gated fixes shipped, on the same
+real device. Root-cause both properly instead of guessing again.
+
+### Completed
+
+- **Glow streak — switched the gating condition.** The original fix
+  skipped `postFX.addGlow()` when `isEnvelopScaleMode()` was true. Since
+  the bug still reproduced, the reporting device's viewport apparently
+  never actually triggers ENVELOP (it's evaluated purely from
+  `matchMedia('(orientation: landscape) and (max-height: 600px)')` in
+  `main.ts`) — meaning that gate silently never applied there, and the
+  bug is more likely a genuine mobile-GPU/WebGL Glow FX compatibility
+  issue than an ENVELOP-viewport-specific one. Added `isMobileDevice()`
+  to `scaleMode.ts` (checks `scene.sys.game.device.os.android`/`.iOS`/
+  `.windowsPhone` — Phaser's own device detection, a property of the
+  actual device, not the current viewport shape) and switched all five
+  `postFX.addGlow()` call sites
+  (`PinkCrystal.ts`/`HeartOfTheTemple.ts`/`Room3Scene.ts` ×2/
+  `MapFractionPuzzle.ts`) to gate on this instead.
+- **Crystal pouch invisible in every room — found a real reactivity bug.**
+  `CrystalHolder.ts` only ever computed its position/scale once, inside
+  `create()`. If the Scale Manager's mode changes *after* that (a real
+  risk — mobile browsers can report an unreliable viewport shape right at
+  page load before settling, and `main.ts` already has to work around
+  exactly this kind of scale-mode timing elsewhere), the pouch stayed
+  frozen at whatever the first, possibly-wrong mode computed — while
+  `HintSystem.ts`'s own `layout()` (already re-invoked on every resize)
+  self-corrected, producing exactly the reported "hint button is
+  correctly positioned but the pouch above it isn't visible at all."
+  Added a proper `CrystalHolder.layout()` (position/scale logic moved out
+  of `create()`, which now just calls it once) and wired it into every
+  owning scene's own resize-triggered `layout()`
+  (`CentralHallScene.ts`/`PinkRoomScene.ts`/`LibraRoomScene.ts`/
+  `Room3Scene.ts`) — the same pattern `HintSystem.ts` already used.
+
+### Out of Scope (respected)
+
+- `ENVELOP_HOLDER_MARGIN_X_PX`/`ENVELOP_HOLDER_SCALE`/
+  `ENVELOP_BUTTON_SCALE`/`ENVELOP_EXTRA_ZOOM_FACTOR` (all from the two
+  previous sprints) — untouched, still correct on their own; this sprint
+  only fixed *when* they get (re-)applied and *which* condition gates the
+  glow.
+- Did not touch `RoundIntroPopup.ts`/`FeedbackPopup.ts` or any other
+  screen-fixed UI for the same "never re-lays-out on resize" risk —
+  `CrystalHolder.ts` was the one actually reported broken.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device — both fixes are grounded in a concrete,
+  identifiable mechanism this time (Phaser's own device-detection API,
+  and a genuine missing-`layout()`-call bug), not another guess, but
+  still needs a real-device re-check given how many rounds this has
+  taken.

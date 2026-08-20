@@ -82,16 +82,7 @@ export default class CrystalHolder {
   create(depth: number): void {
     this.generateTextures();
 
-    const isEnvelop = isEnvelopScaleMode(this.scene);
-    const marginX = isEnvelop ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
-    const marginY = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
-    const container = this.scene.add
-      .container(marginX, marginY)
-      .setDepth(depth)
-      .setScrollFactor(0);
-    if (isEnvelop) {
-      container.setScale(ENVELOP_HOLDER_SCALE);
-    }
+    const container = this.scene.add.container(0, 0).setDepth(depth).setScrollFactor(0);
 
     const frame = this.scene.add.image(0, 0, HOLDER_FRAME_TEXTURE_KEY).setOrigin(0, 0).setScrollFactor(0);
     container.add(frame);
@@ -126,7 +117,33 @@ export default class CrystalHolder {
     }
 
     this.container = container;
+    this.layout();
     this.refresh();
+  }
+
+  /**
+   * Re-applies the container's position/scale for the CURRENT scale mode
+   * — call this from the owning scene's own resize-triggered layout()
+   * (same pattern HintSystem.ts's layout() already uses). Position/scale
+   * were previously only ever set once, in create(); if the Scale
+   * Manager's mode changed after that (a real, documented risk — see
+   * main.ts's own comments on how finicky switching FIT/ENVELOP at
+   * runtime is, and the fact that mobile browsers can report an
+   * unreliable viewport shape right at page load before settling), the
+   * pouch would stay frozen at whatever the first, possibly-wrong mode
+   * computed — reported as "the hint button is correctly positioned but
+   * the crystal pouch above it isn't visible at all" (HintSystem.ts's own
+   * layout() already re-ran on every resize, so it self-corrected while
+   * this class silently didn't).
+   */
+  layout(): void {
+    if (!this.container) {
+      return;
+    }
+    const isEnvelop = isEnvelopScaleMode(this.scene);
+    const marginX = isEnvelop ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
+    const marginY = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
+    this.container.setPosition(marginX, marginY).setScale(isEnvelop ? ENVELOP_HOLDER_SCALE : 1);
   }
 
   /** Re-syncs every slot to the shared registry state — no animation, safe to call any time (e.g. once per scene create()). */
