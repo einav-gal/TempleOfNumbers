@@ -150,6 +150,16 @@ export default class MobilePinchZoom {
   private readonly handleTouchStart = (event: TouchEvent) => this.onTouchStart(event);
   private readonly handleTouchMove = (event: TouchEvent) => this.onTouchMove(event);
   private readonly handleTouchEnd = (event: TouchEvent) => this.onTouchEnd(event);
+  // Safari (iOS) implements its own native pinch-to-zoom-the-page gesture
+  // through these non-standard `gesturestart`/`gesturechange`/`gestureend`
+  // events, entirely separate from touch events — `touch-action: none`
+  // (index.html) and preventDefault() on touchstart/touchmove are NOT
+  // guaranteed to suppress it on every iOS/Safari version. Reported: a
+  // real two-finger pinch did nothing at all in-game — if Safari's native
+  // gesture handling was intercepting the touches first, the game's own
+  // touch listeners would never see them, matching that exact symptom.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readonly handleGestureEvent = (event: any) => event.preventDefault();
   // Deliberately does NOT call scale.refresh() itself — it runs AS A
   // RESULT of one (see the RESIZE listener in create()), so doing so
   // again here would recurse. The public reset() below is the one that
@@ -171,6 +181,11 @@ export default class MobilePinchZoom {
     this.canvas.addEventListener('touchmove', this.handleTouchMove, { passive: false });
     this.canvas.addEventListener('touchend', this.handleTouchEnd, { passive: false });
     this.canvas.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
+    // Safari-only proprietary gesture events — see handleGestureEvent's
+    // own comment. Harmless no-op on browsers that never fire them.
+    this.canvas.addEventListener('gesturestart', this.handleGestureEvent, { passive: false });
+    this.canvas.addEventListener('gesturechange', this.handleGestureEvent, { passive: false });
+    this.canvas.addEventListener('gestureend', this.handleGestureEvent, { passive: false });
 
     // Any refresh — rotation, fullscreen toggle, or a generic resize (see
     // main.ts, which calls game.scale.refresh() for all three) — always
@@ -248,6 +263,9 @@ export default class MobilePinchZoom {
     this.canvas?.removeEventListener('touchmove', this.handleTouchMove);
     this.canvas?.removeEventListener('touchend', this.handleTouchEnd);
     this.canvas?.removeEventListener('touchcancel', this.handleTouchEnd);
+    this.canvas?.removeEventListener('gesturestart', this.handleGestureEvent);
+    this.canvas?.removeEventListener('gesturechange', this.handleGestureEvent);
+    this.canvas?.removeEventListener('gestureend', this.handleGestureEvent);
     this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize);
     if (DEBUG_LOG_CLICKS) {
       this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.handleDebugPointerDown);

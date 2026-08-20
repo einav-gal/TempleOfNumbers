@@ -15,6 +15,12 @@ const HOVER_SCALE = 1.035;
 const HOVER_GLOW_ALPHA = 0.72;
 const HOVER_TWEEN_MS = 180;
 
+// Reported hard to tap precisely on a real phone — both hit zones
+// previously matched their own visible sprite exactly, with zero margin.
+// Expressed as "padding added per side, as a fraction of the sprite's own
+// size" (same convention as this project's other hit-padding constants).
+const HIT_PADDING_FACTOR = 0.25;
+
 // A brief settle-shake before the main swing — "a light stone shake at the
 // start of opening" plus "move the cover a few px forward/down at the
 // start of the animation," read together as the disc jolting loose and
@@ -243,17 +249,21 @@ export default class WallWheel {
       ?.setPosition(centerX, centerY)
       .setDisplaySize(passageSize * 1.3, passageSize * 1.3);
 
-    this.wheelZone?.setPosition(centerX, centerY).setSize(displayWidth, displayHeight);
+    const hitPad = 1 + HIT_PADDING_FACTOR * 2;
+    const wheelHitWidth = displayWidth * hitPad;
+    const wheelHitHeight = displayHeight * hitPad;
+    this.wheelZone?.setPosition(centerX, centerY).setSize(wheelHitWidth, wheelHitHeight);
     if (this.wheelHitRect) {
-      this.wheelHitRect.width = displayWidth;
-      this.wheelHitRect.height = displayHeight;
+      this.wheelHitRect.width = wheelHitWidth;
+      this.wheelHitRect.height = wheelHitHeight;
     }
 
-    this.passageZone?.setPosition(centerX, centerY).setSize(passageSize, passageSize);
+    const passageHitSize = passageSize * hitPad;
+    this.passageZone?.setPosition(centerX, centerY).setSize(passageHitSize, passageHitSize);
     if (this.passageHitCircle) {
-      this.passageHitCircle.x = passageSize / 2;
-      this.passageHitCircle.y = passageSize / 2;
-      this.passageHitCircle.radius = passageSize / 2;
+      this.passageHitCircle.x = passageHitSize / 2;
+      this.passageHitCircle.y = passageHitSize / 2;
+      this.passageHitCircle.radius = passageHitSize / 2;
     }
   }
 

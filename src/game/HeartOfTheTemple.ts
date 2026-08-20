@@ -26,6 +26,14 @@ const CRYSTAL_HOVER_BG_PX = 45;
 const FLOAT_AMPLITUDE_BG_PX = 10;
 const FLOAT_DURATION_MS = 4200;
 
+// Reported hard to tap precisely on a real phone — a plain
+// `setInteractive()` on the image uses its exact opaque+transparent
+// pixel bounds as the hit area, with zero margin. Proportional (not a
+// fixed px value) so it scales correctly regardless of the source
+// asset's native resolution — inflates the hit rect on each axis by this
+// fraction of the image's own native width/height.
+const CRYSTAL_HIT_PADDING_FACTOR = 0.35;
+
 // Each ring is a rear/front PNG pair exported from the same canvas: the
 // rear layer (far arc) renders behind the crystal, the front layer (near
 // arc) in front, so the ring genuinely wraps around it. Both layers of a
@@ -241,7 +249,7 @@ export default class HeartOfTheTemple {
       .image(0, 0, CRYSTAL_KEY)
       .setOrigin(0.5, 1)
       .setDepth(CRYSTAL_DEPTH);
-    this.crystal.setInteractive({ useHandCursor: true });
+    this.setPaddedCrystalInteractive();
     this.crystal.on(Phaser.Input.Events.POINTER_DOWN, () => this.onCrystalClick?.());
     this.crystal.on(Phaser.Input.Events.POINTER_OVER, () => this.setHovered(true));
     this.crystal.on(Phaser.Input.Events.POINTER_OUT, () => this.setHovered(false));
@@ -596,7 +604,7 @@ export default class HeartOfTheTemple {
     } else if (this.mechanismState !== 'opening') {
       // Never re-enable mid-opening-animation — finishOpening() re-enables
       // it itself once the sequence actually completes.
-      this.crystal.setInteractive({ useHandCursor: true });
+      this.setPaddedCrystalInteractive();
     }
     if (this.glowFx) {
       this.glowFx.active = !suppressed;
@@ -657,6 +665,21 @@ export default class HeartOfTheTemple {
       return;
     }
     this.crystal.setY(this.crystalBaseY + this.floatOffset * FLOAT_AMPLITUDE_BG_PX * this.assemblyScale);
+  }
+
+  private setPaddedCrystalInteractive(): void {
+    if (!this.crystal) {
+      return;
+    }
+    const padX = this.crystal.width * CRYSTAL_HIT_PADDING_FACTOR;
+    const padY = this.crystal.height * CRYSTAL_HIT_PADDING_FACTOR;
+    this.crystal.setInteractive(
+      new Phaser.Geom.Rectangle(-padX, -padY, this.crystal.width + padX * 2, this.crystal.height + padY * 2),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    if (this.crystal.input) {
+      this.crystal.input.cursor = 'pointer';
+    }
   }
 
   // Hover: the crystal swells slightly and its glow pulses faster.

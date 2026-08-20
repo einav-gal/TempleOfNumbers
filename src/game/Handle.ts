@@ -9,6 +9,14 @@ const HOVER_SCALE = 1.04;
 const HOVER_TWEEN_MS = 200;
 const REVEAL_FADE_MS = 400;
 
+// Reported hard to tap precisely on a real phone — a plain
+// `setInteractive()` on the image uses its exact opaque+transparent
+// pixel bounds as the hit area, with zero margin. Proportional (not a
+// fixed px value) so it scales correctly regardless of the source
+// asset's native resolution — inflates the hit rect on each axis by this
+// fraction of the image's own native width/height.
+const HIT_PADDING_FACTOR = 0.35;
+
 // Lever-pull animation: rotates to its activated position with a very
 // small mechanical overshoot/bounce at the end rather than easing flatly
 // to a stop.
@@ -83,7 +91,12 @@ export default class Handle {
         if (!this.image) {
           return;
         }
-        this.image.setInteractive({ useHandCursor: false });
+        const padX = this.image.width * HIT_PADDING_FACTOR;
+        const padY = this.image.height * HIT_PADDING_FACTOR;
+        this.image.setInteractive(
+          new Phaser.Geom.Rectangle(-padX, -padY, this.image.width + padX * 2, this.image.height + padY * 2),
+          Phaser.Geom.Rectangle.Contains,
+        );
         this.image.on(Phaser.Input.Events.POINTER_OVER, () => this.setHovered(true));
         this.image.on(Phaser.Input.Events.POINTER_OUT, () => this.setHovered(false));
         this.image.on(Phaser.Input.Events.POINTER_DOWN, () => this.handleClick());

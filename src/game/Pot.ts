@@ -8,6 +8,14 @@ export interface PotSize {
 const HOVER_SCALE = 1.05;
 const HOVER_TWEEN_MS = 220;
 
+// Reported hard to tap precisely on a real phone — a plain
+// `setInteractive()` on the image uses its exact opaque+transparent
+// pixel bounds as the hit area, with zero margin. Proportional (not a
+// fixed px value) so it scales correctly regardless of the source
+// asset's native resolution — inflates the hit rect on each axis by this
+// fraction of the image's own native width/height.
+const HIT_PADDING_FACTOR = 0.35;
+
 // Fall sequence, in background-image pixels/degrees: tilt + slide away from
 // the statue first, then drop to the floor with a small final settling
 // rotation. Two short tweens chained — no physics, no bounce.
@@ -55,10 +63,30 @@ export default class Pot {
       .setAngle(0)
       .setDepth(depth);
 
-    this.image.setInteractive({ useHandCursor: true });
+    this.setPaddedInteractive();
     this.image.on(Phaser.Input.Events.POINTER_OVER, () => this.setHovered(true));
     this.image.on(Phaser.Input.Events.POINTER_OUT, () => this.setHovered(false));
     this.image.on(Phaser.Input.Events.POINTER_DOWN, () => this.handleClick());
+  }
+
+  // A plain setInteractive() on the image would use its exact pixel
+  // bounds (opaque+transparent) as the hit area, with zero margin —
+  // reported hard to tap precisely on a real phone. Inflates it by
+  // HIT_PADDING_FACTOR on every axis instead, proportional to the
+  // image's own native size so it stays correct at any scale.
+  private setPaddedInteractive(): void {
+    if (!this.image) {
+      return;
+    }
+    const padX = this.image.width * HIT_PADDING_FACTOR;
+    const padY = this.image.height * HIT_PADDING_FACTOR;
+    this.image.setInteractive(
+      new Phaser.Geom.Rectangle(-padX, -padY, this.image.width + padX * 2, this.image.height + padY * 2),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    if (this.image.input) {
+      this.image.input.cursor = 'pointer';
+    }
   }
 
   /** baseX/baseY: the pot's floor-contact point in screen space; scale: background cover-scale factor. */
@@ -104,7 +132,7 @@ export default class Pot {
     // for — handleClick() already no-ops if moved, but this keeps the
     // hover/cursor feedback from reappearing on an already-used pot too.
     if (active && !this.moved) {
-      this.image.setInteractive({ useHandCursor: true });
+      this.setPaddedInteractive();
     } else {
       this.image.disableInteractive();
       this.setHovered(false);

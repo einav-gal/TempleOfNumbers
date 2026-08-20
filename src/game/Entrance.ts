@@ -12,6 +12,14 @@ const BASE_GLOW_ALPHA = 0.5;
 const HOVER_GLOW_BOOST = 0.4;
 const HOVER_TWEEN_MS = 220;
 
+// Reported hard to tap precisely on a real phone — the hit zone
+// previously matched the visible frame exactly, with zero margin.
+// Expressed as "padding added per side, as a fraction of the frame's own
+// size" (same convention as Pot.ts/Handle.ts/HeartOfTheTemple.ts's own
+// hit padding), so the clickable zone grows on every axis while staying
+// centered on the same visual frame.
+const HIT_PADDING_FACTOR = 0.25;
+
 // The actual dark opening is inset from the full frame image (the stone
 // lip forms the gap between them) — these fractions of the frame's own
 // display size describe that inset, shared between the texture drawing
@@ -98,10 +106,15 @@ export default class Entrance {
     // Glimmer sits roughly a third of the way down from the arch top,
     // where the passage would recede furthest into the wall.
     this.glow.setPosition(baseX, baseY - height * 0.62).setDisplaySize(width * 0.55, width * 0.55);
-    this.zone.setPosition(baseX, baseY - height / 2).setSize(width, height);
+
+    // Hit zone padded beyond the visual frame (see HIT_PADDING_FACTOR) —
+    // stays centered on the same frame, only the clickable area grows.
+    const hitWidth = width * (1 + HIT_PADDING_FACTOR * 2);
+    const hitHeight = height * (1 + HIT_PADDING_FACTOR * 2);
+    this.zone.setPosition(baseX, baseY - height / 2).setSize(hitWidth, hitHeight);
     if (this.hitRect) {
-      this.hitRect.width = width;
-      this.hitRect.height = height;
+      this.hitRect.width = hitWidth;
+      this.hitRect.height = hitHeight;
     }
   }
 

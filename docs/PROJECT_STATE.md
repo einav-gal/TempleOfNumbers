@@ -3108,6 +3108,37 @@ it (don't just append below it) whenever one of these systems changes.
   other file does manual `clientX`/`clientY`- or `pointer.x`/`y`-based
   hit testing (`MobilePinchZoom.ts` uses `clientX`/`clientY` only to
   measure the pinch gesture itself, never to hit-test a game object).
+- **Central Hall's tap targets padded beyond their visuals:** reported
+  from a real phone — clickable regions felt too small/precise to hit
+  reliably. Audited every Central Hall interactive object first (none had
+  any hit-area padding at all): `Pot.ts`/`Handle.ts`/
+  `HeartOfTheTemple.ts`'s crystal used a plain `image.setInteractive()`
+  (hit area = the image's exact opaque+transparent pixel bounds, zero
+  margin) — each now uses an explicit `Phaser.Geom.Rectangle` inflated by
+  `HIT_PADDING_FACTOR`/`CRYSTAL_HIT_PADDING_FACTOR` (0.35, i.e. the
+  clickable area is ~1.7× the image on each axis), shared via a small
+  `setPaddedInteractive()`/`setPaddedCrystalInteractive()` helper so every
+  call site that re-registers interactivity (e.g. `setActive()`) stays in
+  sync. `Entrance.ts`/`FloorEntrance.ts`/`WallWheel.ts` already had
+  explicit, `layout()`-driven `Rectangle`/`Circle` hit areas, but sized to
+  match their own visuals exactly (also zero padding) — now inflated by
+  `HIT_PADDING_FACTOR` (0.25, ~1.5×) at the same spot in each `layout()`/
+  `updateHitArea()` call, without changing anything about the *visual*
+  sizing. `Statue.ts` has no click handling of its own (purely reactive)
+  and needed no change.
+- **Safari's proprietary pinch-zoom gesture events, suppressed
+  (`MobilePinchZoom.ts`):** reported — a genuine two-finger pinch did
+  nothing at all in-game. iOS Safari implements its own native
+  pinch-to-zoom-the-page gesture through non-standard
+  `gesturestart`/`gesturechange`/`gestureend` events, entirely separate
+  from touch events — `touch-action: none` (`index.html`) and
+  `preventDefault()` on the touch events aren't guaranteed to suppress it
+  on every iOS/Safari version, and if Safari's native handling was
+  intercepting the touches first, the game's own touch listeners would
+  never see them, matching the reported symptom exactly. Added
+  listeners for all three gesture events that just call
+  `event.preventDefault()` — a harmless no-op on any browser that never
+  fires them.
 - A temporary `DEBUG_LOG_CLICKS` flag in `MobilePinchZoom.ts` logs
   pointer/world/camera state and the hit object's name on every
   pointerdown — now verified on a real device and flipped back to `false`

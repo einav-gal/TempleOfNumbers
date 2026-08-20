@@ -27,6 +27,13 @@ const FLICKER_FADE_MS = 900;
 const HOVER_GLOW_BOOST = 0.3;
 const HOVER_TWEEN_MS = 200;
 
+// Reported hard to tap precisely on a real phone — the hit rect
+// previously matched the tile/stair-opening exactly, with zero margin.
+// Expressed as "padding added per side, as a fraction of the shape's own
+// size" (same convention as this project's other hit-padding constants),
+// applied to both the closed-tile and opened-stair hit rects below.
+const HIT_PADDING_FACTOR = 0.25;
+
 // Opening: a brief glow intensify (yoyo) on the cracks, overlapping the
 // start of the split/slide-apart animation that reveals the stair hole.
 const INTENSIFY_PEAK_ALPHA = 1;
@@ -265,16 +272,21 @@ export default class FloorEntrance {
     if (!this.hitRect) {
       return;
     }
+    const pad = 1 + HIT_PADDING_FACTOR * 2;
     if (this.isFloorEntranceOpen) {
-      this.hitRect.width = this.stairHalfW * 2;
-      this.hitRect.height = this.stairHalfH * 2;
-      this.hitRect.x = -this.stairHalfW;
-      this.hitRect.y = -this.stairHalfH;
+      const w = this.stairHalfW * pad;
+      const h = this.stairHalfH * pad;
+      this.hitRect.width = w * 2;
+      this.hitRect.height = h * 2;
+      this.hitRect.x = -w;
+      this.hitRect.y = -h;
     } else {
-      this.hitRect.width = this.halfW * 2;
-      this.hitRect.height = this.halfH * 2;
-      this.hitRect.x = -this.halfW;
-      this.hitRect.y = -this.halfH;
+      const w = this.halfW * pad;
+      const h = this.halfH * pad;
+      this.hitRect.width = w * 2;
+      this.hitRect.height = h * 2;
+      this.hitRect.x = -w;
+      this.hitRect.y = -h;
     }
   }
 

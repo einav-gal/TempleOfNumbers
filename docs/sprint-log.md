@@ -2081,3 +2081,71 @@ real device. Root-cause both properly instead of guessing again.
   and a genuine missing-`layout()`-call bug), not another guess, but
   still needs a real-device re-check given how many rounds this has
   taken.
+
+---
+
+## Sprint — Central Hall Tap-Target Padding + Safari Pinch-Gesture Fix
+
+### Status
+
+Completed
+
+### Goal
+
+Confirmed the crystal glow and pouch-visibility fixes worked. New
+real-device feedback: Central Hall's clickable regions are still hard to
+tap precisely on a small screen, and a genuine two-finger pinch does
+nothing at all (no zoom).
+
+### Completed
+
+- **Audited every Central Hall interactive object** (via a dedicated
+  read-only agent pass) before changing anything: none had any hit-area
+  padding at all. `Pot.ts`/`Handle.ts`/`HeartOfTheTemple.ts`'s crystal
+  used a plain `image.setInteractive()` — hit area = the image's exact
+  pixel bounds. `Entrance.ts`/`FloorEntrance.ts`/`WallWheel.ts` already
+  had explicit, `layout()`-driven `Rectangle`/`Circle` hit areas, but
+  sized to match their own visuals exactly. `Statue.ts` has no click
+  handling of its own.
+- **`src/game/Pot.ts`/`src/game/Handle.ts`/`src/game/HeartOfTheTemple.ts`:**
+  each now uses an explicit `Phaser.Geom.Rectangle` hit area inflated by
+  `HIT_PADDING_FACTOR`/`CRYSTAL_HIT_PADDING_FACTOR` (0.35 — the clickable
+  area ends up ~1.7× the image on each axis), computed proportionally
+  from the image's own native width/height rather than a fixed px value
+  (stays correct at any scale). Shared via a small
+  `setPaddedInteractive()`/`setPaddedCrystalInteractive()` helper so
+  every call site that re-registers interactivity (`Pot.setActive()`,
+  `HeartOfTheTemple.setSuppressed()`) stays in sync rather than drifting.
+- **`src/game/Entrance.ts`/`src/game/FloorEntrance.ts`/
+  `src/game/WallWheel.ts`:** each already had the `Rectangle`/`Circle` +
+  `layout()`/`updateHitArea()` wiring in place — inflated the size fed
+  into that computation by `HIT_PADDING_FACTOR` (0.25, ~1.5×) at the same
+  spot, without touching anything about the *visual* sizing (frame
+  image, glow, tile halves, wheel sprite all untouched).
+- **`src/game/MobilePinchZoom.ts` — Safari gesture events:** iOS Safari
+  implements its own native pinch-to-zoom-the-page gesture through
+  non-standard `gesturestart`/`gesturechange`/`gestureend` events,
+  entirely separate from touch events — `touch-action: none`
+  (`index.html`) and `preventDefault()` on the touch events aren't
+  guaranteed to suppress it on every iOS/Safari version. If Safari's
+  native handling was intercepting the touches first, the game's own
+  touch listeners would never see them — matching "two fingers, nothing
+  happens" exactly. Added listeners for all three events that just call
+  `event.preventDefault()`; harmless no-op on any browser that never
+  fires them.
+
+### Out of Scope (respected)
+
+- `ENVELOP_EXTRA_ZOOM_FACTOR` (world-content zoom) — untouched this
+  sprint; the hit-padding work directly targets "hard to click" without
+  needing to zoom in further (which has its own top/bottom-crop
+  trade-off, already documented).
+- Desktop mouse-click behavior — the padding is unconditional (not
+  ENVELOP/mobile-gated), matching this project's established pattern for
+  low-risk, universally-safe UX improvements, but a few extra px of
+  forgiveness around a cursor click was never the actual complaint.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device.
