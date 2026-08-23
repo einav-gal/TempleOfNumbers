@@ -3270,3 +3270,63 @@ without further changes if persistence is ever added later.
   black-screen incident caused by this config existing only as an
   uncommitted local change — now committed and pushed).
 - **Live URL:** https://einav-gal.github.io/TempleOfNumbers/
+
+### Central Hall mobile-specific framing (completed)
+
+After several rounds of incremental mobile fixes, the user asked for a
+genuine "mobile version" — same game/logic/state, only layout/framing
+changes on mobile. Scoped to Central Hall only this sprint (the most
+spread-out room); Pink Room/Libra Room/Room3 are unchanged.
+
+A dedicated audit (Explore agent) mapped every Central Hall interactive
+element's exact background-pixel anchor: Pot (430,700), Handle (470,655),
+Statue/Entrance (504,695), Pedestal/Heart of the Temple (762,775), Wall
+wheel (768,286), Floor entrance (1160,830) — spanning 48% of the
+1536-wide / 53% of the 1024-tall background. No single static frame can
+show all of them meaningfully bigger without cropping at least the wheel
+(top) or floor entrance (right). The user explicitly chose: default
+framing centered on the crystal/mechanism, reaching the rest via the
+existing two-finger pan (`MobilePinchZoom`).
+
+**`CentralHallScene.ts`**: on an actual mobile device (`isMobileDevice()`
+— device-based, unlike viewport-based `isEnvelopScaleMode()`), the
+background cover-scale is boosted by a new `MOBILE_ZOOM_FACTOR = 1.35`
+(replacing the smaller `ENVELOP_EXTRA_ZOOM_FACTOR` for mobile specifically
+— that constant is untouched and still used for the rare non-mobile short
+viewport case), and the vertical pivot (`pivotY`, a new instance field
+read by `toScreenY()`) shifts from the background's geometric center (512)
+to `MOBILE_PIVOT_Y_BG = 595` — a partial blend toward the pedestal (775),
+not a full recenter, chosen so the wall wheel's bottom rim and the floor
+entrance stay partially visible near the frame edges as a pan invitation
+rather than vanishing outright. Verified arithmetically against the
+`ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX` (190) crop band: the visible bg-Y
+range at these values is ≈[357,833], which comfortably contains the
+crystal, pot, handle, and statue, includes the floor entrance (830) with a
+few px to spare, and includes just the wall wheel's bottom rim (down to
+378) — matching the intended design. The background image itself is now
+positioned through the same pivot (`toScreenX`/`toScreenY` at its own
+center) instead of a hardcoded `width/2, height/2`, so it moves together
+with every anchored element instead of drifting apart from them.
+`CrystalPlacementMode.ts`'s own ENVELOP-tuned slot/tray offsets were
+checked against this same visible range and found to already fit — no
+changes needed there.
+
+Two subtle, non-interactive, screen-fixed pan-hint chevrons (new
+`createMobilePanHints()`, mobile-only) pulse gently near the top and right
+edges, hinting that panning reveals the wheel/floor entrance — added with
+explicit user approval as the one genuinely new UI element in this sprint.
+
+**`MobilePinchZoom.ts`**: gained an optional `setWorldBounds()` (called
+from `CentralHallScene.layout()` with the background's actual on-screen
+rect) and scroll clamping in `updatePinch()`, so a pinch/pan gesture can
+no longer drag the camera past the background's edges into empty canvas
+— a latent gap that became more likely to matter once the default framing
+is off-center and more zoomed-in. Scenes that never call
+`setWorldBounds()` are unaffected (no clamping, same as before).
+
+`npm run build` passes with no TypeScript errors. No physical mobile
+device is available in this environment — as with every prior mobile
+round, the exact numeric tuning (1.35 / 595) is a best-effort derivation
+from the measured coordinates and the existing safe-margin constants, not
+a live-device-confirmed value; needs a real-device check and likely a
+follow-up tuning pass.

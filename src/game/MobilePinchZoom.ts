@@ -139,6 +139,9 @@ export default class MobilePinchZoom {
   private pinchPrevDistance = 0;
   private pinchPrevMidpoint: TouchPoint = { x: 0, y: 0 };
 
+  /** The owning scene's actual rendered background bounds (in its own screen-space coordinate system — see e.g. CentralHallScene.layout()), set via setWorldBounds() whenever that scene lays out. Used only to clamp scroll in updatePinch() so pinch/pan can never reveal empty space beyond the background; undefined (no clamping) for any scene that never calls setWorldBounds(). */
+  private worldBounds?: Phaser.Geom.Rectangle;
+
   /** The camera's own centered scroll position at zoom=1, cached whenever resetCameraAndGestureState() runs — the baseline isZoomedOrPanned() compares against, since a two-finger pan-only gesture (fingers translating without spreading) changes scroll without ever changing zoom. */
   private defaultScrollX = 0;
   private defaultScrollY = 0;
@@ -216,6 +219,11 @@ export default class MobilePinchZoom {
   disable(): void {
     this.isEnabled = false;
     this.abortGesture();
+  }
+
+  /** Called from the owning scene's own layout() with its background's current on-screen rect (its own coordinate system, not world/bg-px) — lets updatePinch() clamp scroll so a pinch/pan can never drift the camera past the background's edges into empty space. Optional: a scene that never calls this simply gets no scroll clamping (unchanged prior behavior). */
+  setWorldBounds(bounds: Phaser.Geom.Rectangle): void {
+    this.worldBounds = bounds;
   }
 
   /**
@@ -421,6 +429,34 @@ export default class MobilePinchZoom {
 
     this.pinchPrevDistance = newDistance;
     this.pinchPrevMidpoint = newMidpoint;
+
+    this.clampScrollToWorldBounds(camera);
+  }
+
+  /**
+   * Keeps the camera's visible area inside worldBounds (if set) — without
+   * this, a pinch-zoomed-in pan can be dragged past the background's own
+   * edges, revealing empty canvas. Recenters on the bounds' axis instead
+   * of clamping when the current view is already wider/taller than the
+   * bounds on that axis (only possible right at MIN_ZOOM, where the view
+   * matches the design canvas almost exactly).
+   */
+  private clampScrollToWorldBounds(camera: Phaser.Cameras.Scene2D.Camera): void {
+    if (!this.worldBounds) {
+      return;
+    }
+    const viewWidth = this.scene.scale.width / camera.zoom;
+    const viewHeight = this.scene.scale.height / camera.zoom;
+
+    camera.scrollX =
+      viewWidth >= this.worldBounds.width
+        ? this.worldBounds.centerX - viewWidth / 2
+        : Phaser.Math.Clamp(camera.scrollX, this.worldBounds.left, this.worldBounds.right - viewWidth);
+
+    camera.scrollY =
+      viewHeight >= this.worldBounds.height
+        ? this.worldBounds.centerY - viewHeight / 2
+        : Phaser.Math.Clamp(camera.scrollY, this.worldBounds.top, this.worldBounds.bottom - viewHeight);
   }
 
   // ---- click suppression (the ONLY code that ever touches scene.input.enabled) ----

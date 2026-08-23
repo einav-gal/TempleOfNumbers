@@ -2149,3 +2149,64 @@ nothing at all (no zoom).
 
 - `npm run build` (`tsc && vite build`) passes with no errors.
 - Not verified on a live device.
+
+## Central Hall mobile-specific framing
+
+Following the previous session's hit-padding/glow/pinch fixes, the user
+declared them insufficient — "שום דבר לא עובד במובייל. אני רוצה לעשות
+גרסת מובייל" (nothing works on mobile, wants a real mobile version) —
+and, after seeing an audit of Central Hall's element spread (Pot 430,700;
+Handle 470,655; Statue 504,695; Pedestal/crystal 762,775; Wall wheel
+768,286; Floor entrance 1160,830 — spanning 48%/53% of the background),
+chose: default framing centered on the crystal/mechanism, reach the rest
+via the existing two-finger pan. Scoped to Central Hall only.
+
+### Changes
+
+- **`src/scenes/CentralHallScene.ts`:**
+  - New `MOBILE_ZOOM_FACTOR = 1.35` and `MOBILE_PIVOT_Y_BG = 595`
+    constants, gated on `isMobileDevice()` (not `isEnvelopScaleMode()` —
+    the same device-vs-viewport distinction already established for the
+    glow fix). `pivotY` is now an instance field (default: background's
+    own center, 512) read by `toScreenY()` in place of the previous
+    hardcoded `(background.height ?? 0)/2`.
+  - The background image's own position is now computed through
+    `toScreenX`/`toScreenY` (at its own center point) rather than a fixed
+    `width/2, height/2`, so it moves together with every bg-px-anchored
+    element when the pivot shifts, instead of the two drifting apart.
+  - Two new subtle, `scrollFactor(0)`, mobile-only pan-hint chevrons
+    (`createMobilePanHints()`) near the top and right screen edges, slowly
+    pulsing alpha — added with explicit user sign-off (the one new UI
+    element introduced this sprint; everything else is reframing of
+    existing content).
+  - Verified arithmetically (no live device): at 1.35×/pivot 595, the
+    visible bg-Y band under the existing 190px ENVELOP crop margin is
+    ≈[357,833] — comfortably includes crystal/pot/handle/statue, includes
+    the floor entrance (830) with a few px to spare, and includes just the
+    wall wheel's bottom rim (down to 378), matching the intended
+    "mostly centered on the mechanism, everything else a partial edge
+    hint" design. `CrystalPlacementMode.ts`'s existing ENVELOP-tuned
+    slot/tray offsets were checked against this same band and already
+    fit — left unchanged.
+- **`src/game/MobilePinchZoom.ts`:** new optional `setWorldBounds()` +
+  scroll clamping inside `updatePinch()`, so panning/pinching can't drag
+  the camera past the background's actual edges into empty canvas — a
+  latent gap that matters more now that the default framing is off-center
+  and more zoomed-in than before. Scenes that never call it (Pink/
+  Libra/Room3, unchanged this sprint) keep the old unclamped behavior.
+
+### Out of scope (respected)
+
+- Pink Room, Libra Room, Room3 — untouched; same single-mechanism-cluster
+  framing they already had.
+- Game logic, puzzles, `GameState` — untouched.
+- Pot/Handle/Statue/Wall-wheel's own bg-px anchors — untouched (only the
+  camera/pivot around them moved).
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device — the exact numeric tuning (1.35× / pivot
+  595) is a best-effort derivation from the measured coordinates and the
+  existing safe-margin constants; a real-device check and likely
+  follow-up tuning pass are expected next.
