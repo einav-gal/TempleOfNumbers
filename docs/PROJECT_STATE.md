@@ -3271,62 +3271,93 @@ without further changes if persistence is ever added later.
   uncommitted local change — now committed and pushed).
 - **Live URL:** https://einav-gal.github.io/TempleOfNumbers/
 
-### Central Hall mobile-specific framing (completed)
+### Central Hall mobile-specific framing — pivot/zoom attempt (superseded)
 
-After several rounds of incremental mobile fixes, the user asked for a
-genuine "mobile version" — same game/logic/state, only layout/framing
-changes on mobile. Scoped to Central Hall only this sprint (the most
-spread-out room); Pink Room/Libra Room/Room3 are unchanged.
+First attempt: boosted `backgroundScale` (`MOBILE_ZOOM_FACTOR = 1.35`) plus
+a re-centered vertical pivot (`MOBILE_PIVOT_Y_BG = 595`, toward the
+pedestal) on `isMobileDevice()`, keeping the rest of the hall reachable via
+`MobilePinchZoom`'s existing two-finger pan, with two subtle pan-hint
+chevrons. Tested live on a real device: still reported as "too small, hard
+to tap." Fully reverted (`MOBILE_ZOOM_FACTOR`/`MOBILE_PIVOT_Y_BG`/`pivotY`/
+the pan-hint chevrons are gone) in favor of the hotspot-navigation approach
+below. `MobilePinchZoom.ts`'s `setWorldBounds()`/scroll-clamping addition
+was kept (still used by the desktop/tablet pinch-zoom path).
 
-A dedicated audit (Explore agent) mapped every Central Hall interactive
-element's exact background-pixel anchor: Pot (430,700), Handle (470,655),
-Statue/Entrance (504,695), Pedestal/Heart of the Temple (762,775), Wall
-wheel (768,286), Floor entrance (1160,830) — spanning 48% of the
-1536-wide / 53% of the 1024-tall background. No single static frame can
-show all of them meaningfully bigger without cropping at least the wheel
-(top) or floor entrance (right). The user explicitly chose: default
-framing centered on the crystal/mechanism, reaching the rest via the
-existing two-finger pan (`MobilePinchZoom`).
+### Central Hall mobile — dedicated link + "one focus at a time" navigation (completed)
 
-**`CentralHallScene.ts`**: on an actual mobile device (`isMobileDevice()`
-— device-based, unlike viewport-based `isEnvelopScaleMode()`), the
-background cover-scale is boosted by a new `MOBILE_ZOOM_FACTOR = 1.35`
-(replacing the smaller `ENVELOP_EXTRA_ZOOM_FACTOR` for mobile specifically
-— that constant is untouched and still used for the rare non-mobile short
-viewport case), and the vertical pivot (`pivotY`, a new instance field
-read by `toScreenY()`) shifts from the background's geometric center (512)
-to `MOBILE_PIVOT_Y_BG = 595` — a partial blend toward the pedestal (775),
-not a full recenter, chosen so the wall wheel's bottom rim and the floor
-entrance stay partially visible near the frame edges as a pan invitation
-rather than vanishing outright. Verified arithmetically against the
-`ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX` (190) crop band: the visible bg-Y
-range at these values is ≈[357,833], which comfortably contains the
-crystal, pot, handle, and statue, includes the floor entrance (830) with a
-few px to spare, and includes just the wall wheel's bottom rim (down to
-378) — matching the intended design. The background image itself is now
-positioned through the same pivot (`toScreenX`/`toScreenY` at its own
-center) instead of a hardcoded `width/2, height/2`, so it moves together
-with every anchored element instead of drifting apart from them.
-`CrystalPlacementMode.ts`'s own ENVELOP-tuned slot/tray offsets were
-checked against this same visible range and found to already fit — no
-changes needed there.
+After the pivot/zoom attempt above still tested as too small in practice,
+the user asked to stop tuning zoom numbers and instead solve it
+structurally: **the camera shows exactly one interactive area at a time**,
+sized to always be comfortably large, and the player steps between areas
+with explicit navigation buttons — plus a genuinely **separate URL** for
+mobile (not just auto-detection on the same link), partly because
+`isMobileDevice()`'s OS-sniff is known to be unreliable on some real
+devices (e.g. iPadOS often reports as a plain Mac).
 
-Two subtle, non-interactive, screen-fixed pan-hint chevrons (new
-`createMobilePanHints()`, mobile-only) pulse gently near the top and right
-edges, hinting that panning reveals the wheel/floor entrance — added with
-explicit user approval as the one genuinely new UI element in this sprint.
+**Dedicated mobile link:** `mobile/index.html` (new, near-identical copy of
+the root `index.html`'s markup/CSS, differing only in its script tag) loads
+`src/main-mobile.ts` (new), which sets `window.FORCE_MOBILE = true` — via a
+dynamic `import('./main')`, not a static one, since static imports are
+hoisted and would otherwise run `main.ts`'s own boot before the flag is
+set — then defers entirely to the existing shared `main.ts`/scene code (no
+game logic is duplicated). `scaleMode.ts`'s `isMobileDevice()` now also
+returns `true` whenever this flag is set, so every existing
+`isMobileDevice()`-gated behavior in the project (postFX-glow skip, and now
+this hotspot navigation) applies automatically on the dedicated link
+regardless of what the device's own OS sniff says — and is also reachable
+for testing from a plain desktop browser by visiting `/mobile/`.
+`vite.config.ts` gained `build.rollupOptions.input` with both HTML entries;
+`npm run build` emits `dist/index.html` and `dist/mobile/index.html`
+side by side, and since `.github/workflows/main.yml` already publishes the
+whole `dist/` folder as-is, both are live with no workflow changes —
+**live URL:** https://einav-gal.github.io/TempleOfNumbers/mobile/.
 
-**`MobilePinchZoom.ts`**: gained an optional `setWorldBounds()` (called
-from `CentralHallScene.layout()` with the background's actual on-screen
-rect) and scroll clamping in `updatePinch()`, so a pinch/pan gesture can
-no longer drag the camera past the background's edges into empty canvas
-— a latent gap that became more likely to matter once the default framing
-is off-center and more zoomed-in. Scenes that never call
-`setWorldBounds()` are unaffected (no clamping, same as before).
+**`src/game/MobileHotspotNav.ts` (new):** a reusable "one focus at a time"
+camera navigator, in the same family as `MobilePinchZoom.ts`/
+`HintSystem.ts`. Takes a list of `{ id, bounds }` (bounds already in the
+owning scene's own screen-space, via its `toScreenX`/`toScreenY` — the same
+convention `CrystalPlacementMode.layout()` already uses) and: renders two
+screen-fixed arrow buttons (‹ prev / next ›, universal left/right
+convention, not tied to Hebrew reading order); on `setHotspots()` (called
+from the scene's `layout()` on every create()/resize) instantly snaps the
+camera to the current hotspot's fit-to-bounds zoom (`camera.setZoom()` +
+`camera.centerOn()`, no animation — animating on every resize would be
+jarring); on `next()`/`prev()`, animates with `camera.pan()`+`zoomTo()`
+(650ms, `Sine.InOut`) reusing the exact same pairing/duration/easing
+already used by this file's own room-exit transitions (e.g.
+`enterRoom3ThroughWheel()`), locking `scene.input.enabled` for the
+duration exactly like those do. Has its own `disable()`/`enable()` (dims
+the buttons + ignores taps) so it can stay off while the intro overlay is
+showing, mirroring `MobilePinchZoom.disable()`/`.enable()` — needed because
+`IntroOverlay`'s own dim rectangle isn't `setInteractive()`, so a tap in a
+screen corner could otherwise reach the nav buttons underneath it.
 
-`npm run build` passes with no TypeScript errors. No physical mobile
-device is available in this environment — as with every prior mobile
-round, the exact numeric tuning (1.35 / 595) is a best-effort derivation
-from the measured coordinates and the existing safe-margin constants, not
-a live-device-confirmed value; needs a real-device check and likely a
-follow-up tuning pass.
+**`CentralHallScene.ts`:** on `isMobileDevice()`, creates a
+`MobileHotspotNav` instead of a `MobilePinchZoom` (the two don't compose —
+free-roam pinch/pan and locked-to-one-area navigation would fight over
+`camera.zoom`/`scroll`). Four hotspots (bg-px boxes, first-draft sizing —
+expected to need live-device tuning like every other numeric constant in
+this project): the crystal/Heart of the Temple plus, once active, the
+`CrystalPlacementMode` slots/tray around it (762,670, 580×700); the
+pot/hidden-handle/statue/hidden-entrance cluster, which sit tightly
+together in one corner (467,560, 300×580); the wall wheel (768,286,
+300×300); the floor entrance to the Libra Room (1160,830, 280×240). Because
+navigation is entirely a camera move — never a per-object "mobile position"
+override — every other component in the hall (`Pot`, `Handle`, `Statue`,
+`Entrance`, `FloorEntrance`, `WallWheel`, `HeartOfTheTemple`, `Atmosphere`,
+`CrystalPlacementMode`, `CrystalHolder`, `HintSystem`) needed **zero code
+changes**: whatever is already correctly positioned by the scene's normal
+(desktop) `layout()` is simply what the camera zooms in on.
+
+Scoped to Central Hall only, as before. Pink Room/Libra Room/Room3 keep
+their existing `MobilePinchZoom` + `ENVELOP_EXTRA_ZOOM_FACTOR` approach
+unchanged; the same hotspot-nav treatment is the natural next step for them
+once this one is validated live.
+
+`npm run build` passes with no TypeScript errors; verified both
+`dist/index.html` and `dist/mobile/index.html` build with correct
+`/TempleOfNumbers/`-prefixed asset paths, and both serve correctly from
+`npm run dev` too. No physical mobile device is available in this
+environment — as with every prior mobile round, the four hotspot boxes are
+a best-effort first draft and will likely need adjustment after a real
+on-device check.

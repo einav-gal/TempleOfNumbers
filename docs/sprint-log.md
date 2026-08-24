@@ -2210,3 +2210,57 @@ via the existing two-finger pan. Scoped to Central Hall only.
   595) is a best-effort derivation from the measured coordinates and the
   existing safe-margin constants; a real-device check and likely
   follow-up tuning pass are expected next.
+
+## Central Hall mobile — superseded by dedicated link + hotspot navigation
+
+The pivot/zoom sprint above was tested live and still reported "too small,
+hard to tap." Rather than tune the zoom number again, the user asked for a
+structurally different mobile approach — see the full write-up in
+`PROJECT_STATE.md`'s "Central Hall mobile — dedicated link + 'one focus at
+a time' navigation" section. Summary of what changed:
+
+- **Reverted**: `MOBILE_ZOOM_FACTOR`, `MOBILE_PIVOT_Y_BG`, the `pivotY`
+  field, and the pan-hint chevrons in `CentralHallScene.ts` — all gone.
+  `backgroundScale`/`toScreenY`/the background's own position are back to
+  their pre-mobile-sprint form.
+- **New dedicated link**: `mobile/index.html` + `src/main-mobile.ts` (sets
+  `window.FORCE_MOBILE` via a dynamic import, then defers to the shared
+  `main.ts` — no game logic duplicated) + `scaleMode.ts`'s
+  `isMobileDevice()` now also checking that flag + `vite.config.ts`'s new
+  multi-entry `rollupOptions.input`. Live at
+  `https://einav-gal.github.io/TempleOfNumbers/mobile/`, no
+  `.github/workflows/main.yml` changes needed (it already publishes all of
+  `dist/`).
+- **New `src/game/MobileHotspotNav.ts`**: camera-only "one focus at a
+  time" navigator — two arrow buttons step through an ordered list of
+  screen-space rectangles, each `camera.pan()`+`zoomTo()` (650ms,
+  `Sine.InOut`, same pairing as `enterRoom3ThroughWheel()` etc.) fitting
+  that rectangle to the viewport. `CentralHallScene.ts` now creates this
+  instead of `MobilePinchZoom` on `isMobileDevice()`, with 4 hotspots
+  (crystal/mechanism, pot-handle-statue corner, wall wheel, floor
+  entrance) built from bg-px boxes in `layout()`.
+- Because this is camera-only, no other Central Hall component
+  (`Pot`/`Handle`/`Statue`/`Entrance`/`FloorEntrance`/`WallWheel`/
+  `HeartOfTheTemple`/`Atmosphere`/`CrystalPlacementMode`/`CrystalHolder`/
+  `HintSystem`) needed any mobile-specific code — a structural
+  simplification over the reverted pivot/zoom approach, which required
+  checking every component's own offset table against the shifted pivot.
+
+### Out of scope (respected)
+
+- Pink Room, Libra Room, Room3 — unchanged; same candidate for a future
+  hotspot-nav sprint once this one is validated on a real device.
+- Game logic, puzzles, `GameState` — untouched.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors; confirmed
+  both `dist/index.html` and `dist/mobile/index.html` are emitted with
+  correct `/TempleOfNumbers/`-prefixed asset paths.
+- `npm run dev` serves both `/TempleOfNumbers/` and
+  `/TempleOfNumbers/mobile/` correctly (curl-verified: 200, correct script
+  tag on each).
+- Not verified on a live device — the four hotspot box sizes are a
+  first-draft derivation from the existing bg-px anchors, not a
+  live-tuned value; a real-device check on the `/mobile/` link and likely
+  a follow-up tuning pass are expected next.

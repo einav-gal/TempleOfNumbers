@@ -13,6 +13,7 @@ import IntroOverlay from '../game/IntroOverlay';
 import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
 import MobilePinchZoom from '../game/MobilePinchZoom';
+import MobileHotspotNav, { Hotspot } from '../game/MobileHotspotNav';
 import CrystalPlacementMode from '../game/CrystalPlacementMode';
 import HintSystem from '../game/HintSystem';
 import {
@@ -155,33 +156,33 @@ const WHEEL_ENTRY_DURATION_MS = 850;
 const WHEEL_ENTRY_FILL_FRACTION = 0.7;
 const WHEEL_ENTRY_MAX_ZOOM = 5;
 
-// Mobile-specific default framing: the hall's six interactive elements
-// span too much of the background (see PROJECT_STATE.md's coordinate
-// audit) to all read comfortably bigger at once, so on an actual mobile
-// device (isMobileDevice() — reliable regardless of the current
-// viewport's aspect ratio, unlike isEnvelopScaleMode()) the default view
-// zooms in further and re-centers vertically toward the Heart of the
-// Temple's pedestal (775) rather than the background's raw geometric
-// center (512). MOBILE_PIVOT_Y_BG is a partial blend, not a full
-// recenter, so the wall wheel's bottom rim and the floor entrance stay
-// partially visible near the frame edges as a pan invitation instead of
-// vanishing outright. Reaching the pot/wheel/floor-entrance on mobile is
-// expected to require the existing two-finger pan (MobilePinchZoom) —
-// an accepted trade-off, confirmed with the user, not a bug.
-const MOBILE_ZOOM_FACTOR = 1.35;
-const MOBILE_PIVOT_Y_BG = 595;
-
-// Subtle, screen-fixed pan-invitation chevrons shown only on mobile (see
-// above) — the two-finger pan gesture has no other visual affordance, so
-// without these a player centered on the crystal has no hint that the
-// wheel (up) or floor entrance (right) exist just off-frame.
-const PAN_HINT_COLOR = 0xd9cfae;
-const PAN_HINT_SIZE_PX = 22;
-const PAN_HINT_MARGIN_PX = 26;
-const PAN_HINT_DEPTH = 60;
-const PAN_HINT_ALPHA_MIN = 0.2;
-const PAN_HINT_ALPHA_MAX = 0.55;
-const PAN_HINT_PULSE_DURATION_MS = 1400;
+// Mobile "one focus at a time" navigation (see MobileHotspotNav.ts):
+// real-device feedback showed that even an aggressively boosted
+// background zoom still read as "too small, hard to tap" while trying to
+// keep the whole spread-out hall in frame — so on an actual mobile device
+// the camera instead fills the viewport with exactly one of these
+// bg-px-measured areas, and the player steps between them via
+// MobileHotspotNav's own arrow buttons. Sizes are generous enough to keep
+// each area's real interactive object(s) comfortably inside with margin,
+// not a tight crop; first-draft values, expected to need live-device
+// tuning like every other numeric constant in this project.
+interface HotspotBox {
+  id: string;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+}
+const MOBILE_HOTSPOTS: HotspotBox[] = [
+  // Heart of the Temple: crystal/rings plus, once active, the
+  // CrystalPlacementMode slots/tray arranged around it.
+  { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 670, w: 580, h: 700 },
+  // Pot / hidden handle / statue / hidden entrance — tightly clustered in
+  // the same corner (see the coordinate audit in PROJECT_STATE.md).
+  { id: 'mechanism', cx: 467, cy: 560, w: 300, h: 580 },
+  { id: 'wheel', cx: WALL_WHEEL_CENTER_X, cy: WALL_WHEEL_CENTER_Y, w: 300, h: 300 },
+  { id: 'floor-entrance', cx: FLOOR_ENTRANCE_CENTER_X, cy: FLOOR_ENTRANCE_CENTER_Y, w: 280, h: 240 },
+];
 
 export default class CentralHallScene extends Phaser.Scene {
   private background?: Phaser.GameObjects.Image;
@@ -197,6 +198,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private crystalHolder?: CrystalHolder;
   private wallWheel?: WallWheel;
   private pinchZoom?: MobilePinchZoom;
+  private hotspotNav?: MobileHotspotNav;
   private crystalPlacementMode?: CrystalPlacementMode;
   private hintSystem?: HintSystem;
   // Independent per-destination transition guards — never one shared
@@ -209,13 +211,10 @@ export default class CentralHallScene extends Phaser.Scene {
   private isEnteringLibraRoom = false;
   private isEnteringRoom3 = false;
   private backgroundScale = 1;
-  private pivotY = 0;
   private popup?: Phaser.GameObjects.Container;
   private popupOverlay?: Phaser.GameObjects.Rectangle;
   private lastPopupToggleAt = -Infinity;
   private overlay?: Phaser.GameObjects.Rectangle;
-  private panHintTop?: Phaser.GameObjects.Triangle;
-  private panHintRight?: Phaser.GameObjects.Triangle;
 
   constructor() {
     super('CentralHallScene');
@@ -282,8 +281,6 @@ export default class CentralHallScene extends Phaser.Scene {
     this.hintSystem = new HintSystem(this);
     this.hintSystem.create();
 
-    this.createMobilePanHints();
-
     // Stage 1 of "return the crystals": only exists at all once every
     // crystal has actually been collected (same shared registry state
     // CrystalHolder already reads, never a parallel tracker) — otherwise
@@ -298,12 +295,23 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.setDimmed(true);
     }
 
-    // Kept off while the intro overlay is showing (see below) — that
-    // overlay isn't camera-scroll-independent, so pinching underneath it
-    // would visually misalign it; every other interaction here already
-    // gates on it having been dismissed.
-    this.pinchZoom = new MobilePinchZoom(this);
-    this.pinchZoom.create();
+    // Mobile (see isMobileDevice() — real device OR the dedicated
+    // /mobile/ link) gets the "one focus at a time" hotspot navigator
+    // instead of free-roam pinch/pan: the two don't compose (both would
+    // fight over camera.zoom/scroll), and hotspot nav is what actually
+    // solves "too small to tap" — see MobileHotspotNav.ts. Desktop/tablet
+    // keeps the existing pinch-to-zoom. Kept off while the intro overlay
+    // is showing (see below) — that overlay isn't camera-scroll-
+    // independent, so zooming/panning underneath it would visually
+    // misalign it; every other interaction here already gates on it
+    // having been dismissed.
+    if (isMobileDevice(this)) {
+      this.hotspotNav = new MobileHotspotNav(this);
+      this.hotspotNav.create();
+    } else {
+      this.pinchZoom = new MobilePinchZoom(this);
+      this.pinchZoom.create();
+    }
 
     this.heart = new HeartOfTheTemple(this);
     this.heart.create();
@@ -388,6 +396,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.heart.setSuppressed(true);
       this.pot.setActive(false);
       this.pinchZoom?.disable();
+      this.hotspotNav?.disable();
 
       this.intro = new IntroOverlay(this);
       this.intro.create();
@@ -396,6 +405,7 @@ export default class CentralHallScene extends Phaser.Scene {
         this.heart?.setSuppressed(false);
         this.pot?.setActive(true);
         this.pinchZoom?.enable();
+        this.hotspotNav?.enable();
       };
     }
 
@@ -430,12 +440,9 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.destroy();
       this.wallWheel?.destroy();
       this.pinchZoom?.destroy();
+      this.hotspotNav?.destroy();
       this.crystalPlacementMode?.destroy();
       this.hintSystem?.destroy();
-      this.panHintTop?.destroy();
-      this.panHintRight?.destroy();
-      this.panHintTop = undefined;
-      this.panHintRight = undefined;
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
@@ -479,29 +486,23 @@ export default class CentralHallScene extends Phaser.Scene {
     }
 
     // Cover the window: scale proportionally so the image always fills it,
-    // cropping the overflow edges instead of distorting. On an actual
-    // mobile device, boosted further and re-centered toward the pedestal
-    // (see MOBILE_ZOOM_FACTOR/MOBILE_PIVOT_Y_BG above); on short
-    // phone-landscape screens that aren't a mobile device (rare, but keeps
-    // old behavior), the more modest ENVELOP_EXTRA_ZOOM_FACTOR still
-    // applies. World content only; screen-fixed UI (CrystalHolder,
-    // HintSystem, popups) is untouched by this.
-    const mobile = isMobileDevice(this);
-    this.pivotY = mobile ? MOBILE_PIVOT_Y_BG : this.background.height / 2;
+    // cropping the overflow edges instead of distorting. On short
+    // phone-landscape screens (ENVELOP), boosted a bit further (see
+    // ENVELOP_EXTRA_ZOOM_FACTOR) — real-device feedback that everything
+    // looked too small/distant there. World content only; screen-fixed UI
+    // (CrystalHolder, HintSystem, popups) is untouched by this. On an
+    // actual mobile device, MobileHotspotNav's own camera pan/zoom (below)
+    // provides all the "make it bigger" framing instead, so this stays at
+    // the plain desktop/tablet value there.
     this.backgroundScale =
       Math.max(width / this.background.width, height / this.background.height) *
-      (mobile ? MOBILE_ZOOM_FACTOR : isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
+      (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
+    this.background
+      .setScale(this.backgroundScale)
+      .setPosition(width / 2, height / 2);
 
     const toScreenX = (bgX: number) => this.toScreenX(bgX, width);
     const toScreenY = (bgY: number) => this.toScreenY(bgY, height);
-
-    // Positioned through the same pivot as every other world element
-    // (rather than the raw width/2, height/2 center) so the background
-    // moves together with everything anchored to it instead of drifting
-    // apart once the pivot is re-centered on mobile.
-    this.background
-      .setScale(this.backgroundScale)
-      .setPosition(toScreenX(this.background.width / 2), toScreenY(this.background.height / 2));
 
     this.pinchZoom?.setWorldBounds(
       new Phaser.Geom.Rectangle(
@@ -512,10 +513,20 @@ export default class CentralHallScene extends Phaser.Scene {
       ),
     );
 
-    this.overlay?.setSize(width, height);
+    if (this.hotspotNav) {
+      const hotspots: Hotspot[] = MOBILE_HOTSPOTS.map((box) => ({
+        id: box.id,
+        bounds: new Phaser.Geom.Rectangle(
+          toScreenX(box.cx - box.w / 2),
+          toScreenY(box.cy - box.h / 2),
+          box.w * this.backgroundScale,
+          box.h * this.backgroundScale,
+        ),
+      }));
+      this.hotspotNav.setHotspots(hotspots);
+    }
 
-    this.panHintTop?.setPosition(width / 2, PAN_HINT_MARGIN_PX);
-    this.panHintRight?.setPosition(width - PAN_HINT_MARGIN_PX, height / 2);
+    this.overlay?.setSize(width, height);
 
     this.wallWheel?.layout(
       toScreenX(WALL_WHEEL_CENTER_X),
@@ -573,45 +584,7 @@ export default class CentralHallScene extends Phaser.Scene {
   }
 
   private toScreenY(bgY: number, height = this.scale.height): number {
-    return height / 2 + (bgY - this.pivotY) * this.backgroundScale;
-  }
-
-  /**
-   * Two subtle, non-interactive chevrons hinting that panning (two
-   * fingers — see MobilePinchZoom) reveals more of the hall: one near the
-   * top edge (the wall wheel sits above the mobile-default frame), one
-   * near the right edge (the floor entrance sits to the right of it).
-   * Screen-fixed and depth-layered below every real popup/UI so they
-   * never block or compete with anything clickable. Only created on an
-   * actual mobile device — desktop/tablet FIT framing already shows
-   * everything, so there's nothing to hint at there.
-   */
-  private createMobilePanHints(): void {
-    if (!isMobileDevice(this)) {
-      return;
-    }
-    const size = PAN_HINT_SIZE_PX;
-
-    this.panHintTop = this.add
-      .triangle(0, 0, 0, size, size, size, size / 2, 0, PAN_HINT_COLOR, PAN_HINT_ALPHA_MIN)
-      .setScrollFactor(0)
-      .setDepth(PAN_HINT_DEPTH);
-
-    this.panHintRight = this.add
-      .triangle(0, 0, 0, 0, 0, size, size, size / 2, PAN_HINT_COLOR, PAN_HINT_ALPHA_MIN)
-      .setScrollFactor(0)
-      .setDepth(PAN_HINT_DEPTH);
-
-    [this.panHintTop, this.panHintRight].forEach((hint) => {
-      this.tweens.add({
-        targets: hint,
-        alpha: { from: PAN_HINT_ALPHA_MIN, to: PAN_HINT_ALPHA_MAX },
-        duration: PAN_HINT_PULSE_DURATION_MS,
-        yoyo: true,
-        repeat: -1,
-        ease: Phaser.Math.Easing.Sine.InOut,
-      });
-    });
+    return height / 2 + (bgY - (this.background?.height ?? 0) / 2) * this.backgroundScale;
   }
 
   private openPopup(): void {

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Temple of the Lost Numbers</title>
+    <!-- Bellefair: the game's one shared font, Hebrew + Latin alike (see src/game/textStyle.ts). Regular weight only. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bellefair&display=swap" rel="stylesheet" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+
+      /* Browser-level pinch-zoom is no longer how the player zooms —
+         MobilePinchZoom.ts implements it entirely inside Phaser instead
+         (camera.zoom + scroll), which is what actually keeps click
+         hit-testing aligned with what's visually shown, and works
+         identically in and out of fullscreen. So the canvas itself opts
+         fully OUT of native browser gestures (no page-zoom, no
+         page-pan starting there) — everything two-finger on it is ours
+         to interpret. html/body keep the standard `manipulation` value
+         (they never actually scroll — nothing overflows a
+         position:fixed, viewport-sized #game — this only disables
+         double-tap-zoom outside the canvas). The HTML fullscreen button
+         is untouched (see its own rule below) so it stays a normal,
+         responsive tap target. */
+      html,
+      body {
+        touch-action: manipulation;
+      }
+
+      /* No wrapper around #game carries its own max-width/padding/margin
+         or fixed size — it always fills the viewport so Phaser's own
+         Scale Manager (see src/main.ts — FIT on desktop/tablet, ENVELOP
+         on short phone-landscape screens) has the full available space
+         to work with, with no extra frame ever clipping or scrolling it.
+         `position: fixed` keeps it pinned to the real viewport even
+         while mobile browser chrome (address bar) is showing/hiding. */
+      #game {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100dvh;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+      }
+
+      /* Phaser sets the canvas's own CSS width/height directly to
+         implement whichever scale mode is active. Under FIT that canvas
+         is already never bigger than #game, so `margin: auto` centering
+         is a harmless no-op; under ENVELOP (phone landscape) the canvas
+         is deliberately made TALLER than #game so the extra height can
+         crop off top/bottom via #game's own overflow:hidden. Forcing
+         `width: 100%; height: 100%` here (or max-width/max-height: 100%)
+         would fight that intentional oversize and squash the image, so
+         nothing here constrains the canvas's own size at all — only
+         Phaser's Scale Manager does. */
+      #game canvas {
+        display: block;
+        margin: 0 auto;
+        touch-action: none;
+      }
+
+      /* True (OS-level) fullscreen — requested from the intro's own
+         "כניסה למקדש" button, or the small standalone toggle below (see
+         src/fullscreen.ts). Same centering approach as the normal case,
+         just against the fullscreen viewport instead of the browser one. */
+      #game:fullscreen,
+      #game:-webkit-full-screen {
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+      }
+
+      #game:fullscreen canvas,
+      #game:-webkit-full-screen canvas {
+        margin: 0 auto;
+      }
+
+      /* Always-present control to enter/exit fullscreen (icon + aria-label
+         both swap on fullscreenchange — see main.ts) — e.g. re-entering
+         after the player leaves it via the browser's own UI/back gesture
+         mid-game. Hidden entirely when the Fullscreen API isn't
+         supported at all (see setUpFullscreenToggleButton() in
+         src/main.ts) rather than left as a dead button. Kept clear of
+         notches/rounded corners/home-indicator via the safe-area insets,
+         never as padding on #game itself (that would shrink the canvas).
+         At least 56x56px (a large, comfortable mobile touch target), and
+         given its own stacking context (fixed + z-index) so it's always
+         above the canvas regardless of DOM order. */
+      #fullscreen-toggle {
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 10px);
+        right: calc(env(safe-area-inset-right, 0px) + 10px);
+        z-index: 10000;
+        width: 56px;
+        height: 56px;
+        min-width: 56px;
+        min-height: 56px;
+        padding: 0;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.5);
+        color: #f2e9d8;
+        font-size: 24px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      #fullscreen-toggle:hover {
+        background: rgba(0, 0, 0, 0.7);
+      }
+
+      /* Global "reset zoom" control — a plain HTML element over the
+         canvas, never a Phaser object/Zone (see MobilePinchZoom.ts,
+         which no longer creates any interactive Phaser object of its
+         own). Hidden by default; main.ts polls the active scene's
+         MobilePinchZoom.isZoomedOrPanned() and toggles `.visible` on/off
+         — it only ever shows once zoom/pan is actually active. Opposite
+         corner from the fullscreen toggle so the two never crowd each
+         other; same size/safe-area treatment. */
+      #zoom-reset-toggle {
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 10px);
+        left: calc(env(safe-area-inset-left, 0px) + 10px);
+        z-index: 10000;
+        width: 56px;
+        height: 56px;
+        min-width: 56px;
+        min-height: 56px;
+        padding: 0;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.5);
+        color: #f2e9d8;
+        font-size: 15px;
+        font-family: 'Bellefair', serif;
+        line-height: 1.15;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        cursor: pointer;
+        touch-action: manipulation;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+      }
+
+      #zoom-reset-toggle.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      #zoom-reset-toggle:hover {
+        background: rgba(0, 0, 0, 0.7);
+      }
+
+      /* Small, deliberately unobtrusive testing indicator — see
+         GameState.ts's isDebugModeActive()/main.ts's setUpDebugStageTag().
+         Hidden by default; only toggled to `.visible` when ?debug=final
+         actually applied this session, never in a normal playthrough.
+         pointer-events: none so it can never intercept a click meant for
+         the game underneath it. */
+      #debug-stage-tag {
+        display: none;
+        position: fixed;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10000;
+        padding: 3px 10px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.55);
+        color: rgba(255, 210, 138, 0.85);
+        font-family: monospace;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        pointer-events: none;
+      }
+
+      #debug-stage-tag.visible {
+        display: block;
+      }
+
+      /* Portrait-only prompt to rotate — pure CSS, so it appears/disappears
+         immediately on rotation with no JS orientation listener needed. */
+      #rotate-overlay {
+        display: none;
+      }
+
+      @media (orientation: portrait) {
+        #rotate-overlay {
+          display: flex;
+        }
+
+        #fullscreen-toggle,
+        #zoom-reset-toggle {
+          display: none;
+        }
+      }
+
+      #rotate-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        background: #000;
+        color: #f2e9d8;
+        font-family: 'Bellefair', serif;
+        font-size: 22px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <button id="fullscreen-toggle" type="button" aria-label="מסך מלא" title="מסך מלא">
+      <span id="fullscreen-toggle-icon" aria-hidden="true">⛶</span>
+    </button>
+    <button id="zoom-reset-toggle" type="button" aria-label="איפוס זום" title="איפוס זום">איפוס<br />זום</button>
+    <div id="debug-stage-tag">DEBUG: FINAL STAGE</div>
+    <div id="rotate-overlay">
+      <p>סובבו את המכשיר למצב מאוזן</p>
+    </div>
+    <script type="module" src="/src/main-mobile.ts"></script>
+  </body>
+</html>

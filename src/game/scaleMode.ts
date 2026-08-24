@@ -72,8 +72,18 @@ export const ENVELOP_EXTRA_ZOOM_FACTOR = 1.12;
  * mismatch — so the glow-skip is now gated on this (actual mobile OS)
  * instead, catching the bug on any phone/tablet regardless of the
  * viewport's current aspect ratio or scale mode.
+ *
+ * Also true when `window.FORCE_MOBILE` was set (see `main-mobile.ts`,
+ * loaded only from the dedicated `/mobile/` entry point) — the OS sniff
+ * above is known to be unreliable on some real devices (e.g. iPadOS
+ * commonly reports as a plain Mac), so the dedicated mobile link forces
+ * this on explicitly rather than depending on device detection at all.
+ * This also makes every isMobileDevice()-gated behavior in the project
+ * reachable from a desktop browser for testing, just by opening
+ * `/mobile/` there.
  */
 export function isMobileDevice(scene: Phaser.Scene): boolean {
   const os = scene.sys.game.device.os;
-  return os.android || os.iOS || os.windowsPhone;
+  const forced = (window as unknown as { FORCE_MOBILE?: boolean }).FORCE_MOBILE === true;
+  return os.android || os.iOS || os.windowsPhone || forced;
 }
