@@ -5,6 +5,7 @@ import Doorway from '../game/Doorway';
 import EquivalencePuzzle from '../game/EquivalencePuzzle';
 import CrystalHolder from '../game/CrystalHolder';
 import MobilePinchZoom from '../game/MobilePinchZoom';
+import FixedUiCamera from '../game/FixedUiCamera';
 import { getPinkRoomState } from '../game/GameState';
 import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
 
@@ -58,6 +59,7 @@ export default class PinkRoomScene extends Phaser.Scene {
   private exit?: Doorway;
   private crystalHolder?: CrystalHolder;
   private pinchZoom?: MobilePinchZoom;
+  private fixedUiCamera?: FixedUiCamera;
   private overlay?: Phaser.GameObjects.Rectangle;
   private backgroundScale = 1;
   private isReturning = false;
@@ -96,6 +98,9 @@ export default class PinkRoomScene extends Phaser.Scene {
     this.pinchZoom = new MobilePinchZoom(this);
     this.pinchZoom.create();
 
+    this.fixedUiCamera = new FixedUiCamera(this);
+    this.fixedUiCamera.create();
+
     this.layout(this.scale.width, this.scale.height);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -104,6 +109,7 @@ export default class PinkRoomScene extends Phaser.Scene {
       this.puzzle?.destroy();
       this.crystalHolder?.destroy();
       this.pinchZoom?.destroy();
+      this.fixedUiCamera?.destroy();
     });
 
     this.playEntryAnimation();
@@ -244,6 +250,7 @@ export default class PinkRoomScene extends Phaser.Scene {
     this.exit?.setActive(false);
 
     this.cameras.main.fadeOut(EXIT_FADE_MS, 0, 0, 0);
+    this.fixedUiCamera?.fadeOut(EXIT_FADE_MS, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('CentralHallScene');
     });

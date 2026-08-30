@@ -11,6 +11,7 @@ import {
   isMobileDevice,
 } from '../game/scaleMode';
 import MobilePinchZoom from '../game/MobilePinchZoom';
+import FixedUiCamera from '../game/FixedUiCamera';
 
 const BACKGROUND_KEY = 'room3-background';
 const OVERLAY_DEPTH = 90;
@@ -104,6 +105,7 @@ export default class Room3Scene extends Phaser.Scene {
   private pedestalImage?: Phaser.GameObjects.Image;
   private pedestalShadow?: Phaser.GameObjects.Graphics;
   private pinchZoom?: MobilePinchZoom;
+  private fixedUiCamera?: FixedUiCamera;
   private overlay?: Phaser.GameObjects.Rectangle;
   private backgroundScale = 1;
   private isReturning = false;
@@ -191,6 +193,9 @@ export default class Room3Scene extends Phaser.Scene {
     this.pinchZoom = new MobilePinchZoom(this);
     this.pinchZoom.create();
 
+    this.fixedUiCamera = new FixedUiCamera(this);
+    this.fixedUiCamera.create();
+
     this.layout(this.scale.width, this.scale.height);
     this.startCrystalHover();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
@@ -199,6 +204,7 @@ export default class Room3Scene extends Phaser.Scene {
       this.crystalHolder?.destroy();
       this.mapPuzzle?.destroy();
       this.pinchZoom?.destroy();
+      this.fixedUiCamera?.destroy();
       this.bigCrystalGlowTween?.stop();
       this.bigCrystalFloatTween?.stop();
       this.bigCrystalPulseTween?.stop();
@@ -550,6 +556,7 @@ export default class Room3Scene extends Phaser.Scene {
     this.exit?.setActive(false);
 
     this.cameras.main.fadeOut(EXIT_FADE_MS, 0, 0, 0);
+    this.fixedUiCamera?.fadeOut(EXIT_FADE_MS, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('CentralHallScene');
     });

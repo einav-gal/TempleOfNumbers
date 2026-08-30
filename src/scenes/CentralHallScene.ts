@@ -14,6 +14,7 @@ import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 import MobileHotspotNav, { Hotspot } from '../game/MobileHotspotNav';
+import FixedUiCamera from '../game/FixedUiCamera';
 import CrystalPlacementMode from '../game/CrystalPlacementMode';
 import HintSystem from '../game/HintSystem';
 import {
@@ -214,6 +215,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private wallWheel?: WallWheel;
   private pinchZoom?: MobilePinchZoom;
   private hotspotNav?: MobileHotspotNav;
+  private fixedUiCamera?: FixedUiCamera;
   private crystalPlacementMode?: CrystalPlacementMode;
   private hintSystem?: HintSystem;
   // Independent per-destination transition guards — never one shared
@@ -424,6 +426,13 @@ export default class CentralHallScene extends Phaser.Scene {
       };
     }
 
+    // MobileHotspotNav and pinch gestures zoom the world camera. Phaser's
+    // scrollFactor(0) alone does not opt UI out of that zoom, so route all
+    // fixed UI through a stable second camera before the first layout can
+    // focus a hotspot.
+    this.fixedUiCamera = new FixedUiCamera(this);
+    this.fixedUiCamera.create();
+
     // Audio may only start after a user gesture.
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => this.ambience.start());
 
@@ -456,11 +465,13 @@ export default class CentralHallScene extends Phaser.Scene {
       this.wallWheel?.destroy();
       this.pinchZoom?.destroy();
       this.hotspotNav?.destroy();
+      this.fixedUiCamera?.destroy();
       this.crystalPlacementMode?.destroy();
       this.hintSystem?.destroy();
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
+    this.fixedUiCamera.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
   }
 
   /**

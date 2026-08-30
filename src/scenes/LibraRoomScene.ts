@@ -4,6 +4,7 @@ import Doorway from '../game/Doorway';
 import LibraPuzzle from '../game/LibraPuzzle';
 import CrystalHolder from '../game/CrystalHolder';
 import MobilePinchZoom from '../game/MobilePinchZoom';
+import FixedUiCamera from '../game/FixedUiCamera';
 import { getLibraRoomState } from '../game/GameState';
 import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
 
@@ -48,6 +49,7 @@ export default class LibraRoomScene extends Phaser.Scene {
   private puzzle?: LibraPuzzle;
   private crystalHolder?: CrystalHolder;
   private pinchZoom?: MobilePinchZoom;
+  private fixedUiCamera?: FixedUiCamera;
   private overlay?: Phaser.GameObjects.Rectangle;
   private backgroundScale = 1;
   private isReturning = false;
@@ -107,6 +109,9 @@ export default class LibraRoomScene extends Phaser.Scene {
     this.pinchZoom = new MobilePinchZoom(this);
     this.pinchZoom.create();
 
+    this.fixedUiCamera = new FixedUiCamera(this);
+    this.fixedUiCamera.create();
+
     if (getLibraRoomState(this.registry).completed) {
       this.puzzle.restoreCompleted();
       this.exit.setActive(true);
@@ -124,6 +129,7 @@ export default class LibraRoomScene extends Phaser.Scene {
       this.puzzle?.destroy();
       this.crystalHolder?.destroy();
       this.pinchZoom?.destroy();
+      this.fixedUiCamera?.destroy();
     });
 
     this.playEntryAnimation();
@@ -202,6 +208,7 @@ export default class LibraRoomScene extends Phaser.Scene {
     this.exit?.setActive(false);
 
     this.cameras.main.fadeOut(EXIT_FADE_MS, 0, 0, 0);
+    this.fixedUiCamera?.fadeOut(EXIT_FADE_MS, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('CentralHallScene');
     });
