@@ -162,10 +162,15 @@ const WHEEL_ENTRY_MAX_ZOOM = 5;
 // keep the whole spread-out hall in frame — so on an actual mobile device
 // the camera instead fills the viewport with exactly one of these
 // bg-px-measured areas, and the player steps between them via
-// MobileHotspotNav's own arrow buttons. Sizes are generous enough to keep
-// each area's real interactive object(s) comfortably inside with margin,
-// not a tight crop; first-draft values, expected to need live-device
-// tuning like every other numeric constant in this project.
+// MobileHotspotNav's own arrow buttons.
+//
+// Live-device feedback on the first draft: still too much bare background
+// showing on the sides of the actual clickable object, making it read as
+// small even once "in frame" — these are cropped much tighter around each
+// object's own real size (crystal ~300 tall, handle 55 wide, wall wheel
+// 185 wide, floor entrance 140 wide, etc.) rather than a generous
+// catch-all box. Still first-draft values, expected to need further
+// live-device tuning like every other numeric constant in this project.
 interface HotspotBox {
   id: string;
   cx: number;
@@ -173,16 +178,26 @@ interface HotspotBox {
   w: number;
   h: number;
 }
-const MOBILE_HOTSPOTS: HotspotBox[] = [
-  // Heart of the Temple: crystal/rings plus, once active, the
-  // CrystalPlacementMode slots/tray arranged around it.
-  { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 670, w: 580, h: 700 },
-  // Pot / hidden handle / statue / hidden entrance — tightly clustered in
-  // the same corner (see the coordinate audit in PROJECT_STATE.md).
-  { id: 'mechanism', cx: 467, cy: 560, w: 300, h: 580 },
-  { id: 'wheel', cx: WALL_WHEEL_CENTER_X, cy: WALL_WHEEL_CENTER_Y, w: 300, h: 300 },
-  { id: 'floor-entrance', cx: FLOOR_ENTRANCE_CENTER_X, cy: FLOOR_ENTRANCE_CENTER_Y, w: 280, h: 240 },
-];
+// Pot / hidden handle / statue / hidden entrance — tightly clustered in
+// the same corner (see the coordinate audit in PROJECT_STATE.md); the
+// cluster's own real horizontal spread is narrow (handle only 55bg-px
+// wide, entrance 145), so this box is far narrower than it is tall.
+const MECHANISM_HOTSPOT: HotspotBox = { id: 'mechanism', cx: 475, cy: 510, w: 220, h: 520 };
+const WHEEL_HOTSPOT: HotspotBox = { id: 'wheel', cx: WALL_WHEEL_CENTER_X, cy: WALL_WHEEL_CENTER_Y, w: 220, h: 220 };
+const FLOOR_ENTRANCE_HOTSPOT: HotspotBox = {
+  id: 'floor-entrance',
+  cx: FLOOR_ENTRANCE_CENTER_X,
+  cy: FLOOR_ENTRANCE_CENTER_Y,
+  w: 200,
+  h: 170,
+};
+// The crystal's own true clickable size (~300 tall, centered ~195bg-px
+// above the pedestal — see HeartOfTheTemple.ts) is much smaller than the
+// full spread CrystalPlacementMode's slots/tray need once active — so
+// this box is computed per-layout from live game state (see layout()),
+// not a single fixed constant like the others.
+const CRYSTAL_HOTSPOT_BEFORE_COLLECTION: HotspotBox = { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 580, w: 340, h: 440 };
+const CRYSTAL_HOTSPOT_WITH_PLACEMENT: HotspotBox = { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 670, w: 520, h: 660 };
 
 export default class CentralHallScene extends Phaser.Scene {
   private background?: Phaser.GameObjects.Image;
@@ -514,7 +529,13 @@ export default class CentralHallScene extends Phaser.Scene {
     );
 
     if (this.hotspotNav) {
-      const hotspots: Hotspot[] = MOBILE_HOTSPOTS.map((box) => ({
+      const boxes: HotspotBox[] = [
+        this.crystalPlacementMode ? CRYSTAL_HOTSPOT_WITH_PLACEMENT : CRYSTAL_HOTSPOT_BEFORE_COLLECTION,
+        MECHANISM_HOTSPOT,
+        WHEEL_HOTSPOT,
+        FLOOR_ENTRANCE_HOTSPOT,
+      ];
+      const hotspots: Hotspot[] = boxes.map((box) => ({
         id: box.id,
         bounds: new Phaser.Geom.Rectangle(
           toScreenX(box.cx - box.w / 2),

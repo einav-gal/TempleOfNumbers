@@ -2264,3 +2264,46 @@ a time' navigation" section. Summary of what changed:
   first-draft derivation from the existing bg-px anchors, not a
   live-tuned value; a real-device check on the `/mobile/` link and likely
   a follow-up tuning pass are expected next.
+
+## Central Hall mobile hotspots — cropped tighter after live feedback
+
+Live-device feedback on the `/mobile/` link: still too much bare
+background showing on the sides of each focused area, making the actual
+clickable object read as small. Root cause confirmed by comparing each
+hotspot box against the real object sizes already defined elsewhere in
+`CentralHallScene.ts` (`HANDLE_WIDTH_BG=55`, `ENTRANCE_SIZE.widthBg=145`,
+`WALL_WHEEL_WIDTH_BG=185`, `FLOOR_ENTRANCE_WIDTH_BG=140`,
+`HeartOfTheTemple.ts`'s `CRYSTAL_HEIGHT_BG_PX=300`) — the first-draft boxes
+had roughly 1.5-2x more margin on each side than the objects need.
+
+- All four hotspot boxes tightened, mostly on width (`MECHANISM_HOTSPOT`
+  300→220, `WHEEL_HOTSPOT` 300→220, `FLOOR_ENTRANCE_HOTSPOT` 280→200, with
+  matching height trims).
+- The crystal hotspot is now **state-dependent**: before all three
+  crystals are collected, the only real clickable target is the crystal
+  itself (~300bg-px tall) — `CRYSTAL_HOTSPOT_BEFORE_COLLECTION` (340×440)
+  replaces the old fixed 580×700 box, which was sized for the much wider
+  spread `CrystalPlacementMode`'s slots/tray need (`CRYSTAL_HOTSPOT_WITH_PLACEMENT`,
+  520×660, kept for that later state). `CentralHallScene.layout()` now
+  picks between the two based on `this.crystalPlacementMode` (truthy once
+  `areAllCrystalsCollected()` is true), the same state this file already
+  reads elsewhere in `create()`.
+- **`MobileHotspotNav.ts`** also gained a real correctness fix found while
+  re-deriving these numbers: `scene.scale.height` is the fixed 1024
+  design-resolution value, not the physical viewport — on ENVELOP
+  (short phone-landscape) that fixed canvas is cropped by
+  `ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX` (190 each) at the CSS layer, which
+  the camera's own zoom math has no notion of. The previous fill-fraction
+  math sized boxes against the full 1024, which — for any height-bound
+  hotspot — would actually overshoot the truly visible ~644px band and
+  clip the object's top/bottom rather than showing it small. New
+  `visibleHeight()` subtracts that margin (only when
+  `isEnvelopScaleMode()`) before computing `zoomForHeight`, so "fill 82%"
+  now means 82% of what's actually on screen.
+
+### Verification
+
+- `npm run build` (`tsc && vite build`) passes with no errors.
+- Not verified on a live device — tightened box sizes are still a
+  best-effort derivation from the objects' own known bg-px dimensions,
+  not a live-tuned value.

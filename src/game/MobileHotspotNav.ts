@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
 
 const BUTTON_SIZE_PX = 56;
 const BUTTON_MARGIN_PX = 18;
@@ -113,9 +114,26 @@ export default class MobileHotspotNav {
 
   // ---- camera framing -----------------------------------------------
 
+  /**
+   * scene.scale.height is the FIXED 1536x1024 design resolution, not the
+   * physical viewport — Phaser's Scale Manager handles that mapping
+   * separately. On ENVELOP (short phone-landscape), it crops
+   * ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX worth of that same fixed-resolution
+   * canvas off the top/bottom at the CSS layer (see scaleMode.ts) — the
+   * camera itself doesn't know that, so computing a fill fraction against
+   * the raw scale.height would size things to fill space that's actually
+   * cropped away, clipping the top/bottom of whatever's in frame. This
+   * subtracts that cropped band first so "fill" means fill the space that
+   * is actually visible.
+   */
+  private visibleHeight(): number {
+    const full = this.scene.scale.height;
+    return isEnvelopScaleMode(this.scene) ? full - ENVELOP_TOP_SAFE_MARGIN_PX - ENVELOP_BOTTOM_SAFE_MARGIN_PX : full;
+  }
+
   private targetZoomFor(bounds: Phaser.Geom.Rectangle): number {
     const zoomForWidth = (this.scene.scale.width * FILL_FRACTION) / Math.max(bounds.width, 1);
-    const zoomForHeight = (this.scene.scale.height * FILL_FRACTION) / Math.max(bounds.height, 1);
+    const zoomForHeight = (this.visibleHeight() * FILL_FRACTION) / Math.max(bounds.height, 1);
     return Math.max(1, Math.min(MAX_ZOOM, zoomForWidth, zoomForHeight));
   }
 

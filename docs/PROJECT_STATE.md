@@ -3361,3 +3361,18 @@ once this one is validated live.
 environment — as with every prior mobile round, the four hotspot boxes are
 a best-effort first draft and will likely need adjustment after a real
 on-device check.
+
+**Follow-up after live testing:** reported as still too much bare
+background around each focused object. All four boxes cropped
+significantly tighter (mostly narrower, per the objects' own real known
+widths: handle 55, entrance 145, wall wheel 185, floor entrance 140
+bg-px), and the crystal hotspot is now state-dependent (a tight ~340×440
+box before crystal collection, when the crystal itself is the only real
+target; the wider ~520×660 box only once `CrystalPlacementMode` is active
+and its slots/tray need the room). Also fixed a real bug found while
+re-deriving these sizes: `MobileHotspotNav`'s zoom math was computed
+against the fixed 1024 design-resolution height rather than the true
+visible height under ENVELOP's ~190px top/bottom CSS crop, which for a
+height-bound hotspot would clip its top/bottom rather than sizing it
+correctly — see `sprint-log.md` for the full detail. Still no live-device
+confirmation available in this environment.
