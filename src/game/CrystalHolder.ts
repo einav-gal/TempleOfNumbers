@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getCrystalCollectionState, type CrystalId } from './GameState';
-import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
+import { isEnvelopScaleMode, isMobileDevice, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
 
 // Compact — "a small ancient pouch," not a modern inventory panel —
 // screen-fixed in the upper-left safe area, margin-anchored so it's
@@ -141,9 +141,10 @@ export default class CrystalHolder {
       return;
     }
     const isEnvelop = isEnvelopScaleMode(this.scene);
-    const marginX = isEnvelop ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
+    const isMobile = isMobileDevice(this.scene);
+    const marginX = isMobile ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
     const marginY = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
-    this.container.setPosition(marginX, marginY).setScale(isEnvelop ? ENVELOP_HOLDER_SCALE : 1);
+    this.container.setPosition(marginX, marginY).setScale(isMobile ? ENVELOP_HOLDER_SCALE : 1);
   }
 
   /** Re-syncs every slot to the shared registry state — no animation, safe to call any time (e.g. once per scene create()). */

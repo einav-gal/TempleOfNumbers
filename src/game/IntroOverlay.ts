@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
 import introTorchUrl from '../../assets/images/central-hall/intro-torch.png';
 import { FONT_FAMILY } from './textStyle';
-import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
+import {
+  isEnvelopScaleMode,
+  isMobileDevice,
+  ENVELOP_TOP_SAFE_MARGIN_PX,
+  ENVELOP_BOTTOM_SAFE_MARGIN_PX,
+} from './scaleMode';
 import { requestGameFullscreen } from '../fullscreen';
 
 const OVERLAY_ALPHA = 0.72;
@@ -71,18 +76,18 @@ const LINE_SPACING_PX = 6;
 // visible vertical band.
 const MOBILE_PANEL_WIDTH_RATIO = 0.92;
 const MOBILE_PANEL_MAX_WIDTH = 1320;
-const MOBILE_TITLE_FONT_PX = 34;
-const MOBILE_BODY_FONT_PX = 25;
-const MOBILE_BODY_FONT_MIN_PX = 17;
+const MOBILE_TITLE_FONT_PX = 42;
+const MOBILE_BODY_FONT_PX = 32;
+const MOBILE_BODY_FONT_MIN_PX = 20;
 const MOBILE_LINE_SPACING_PX = 3;
 const MOBILE_PANEL_PADDING_TOP = 20;
 const MOBILE_PANEL_PADDING_BOTTOM = 20;
 const MOBILE_TITLE_BODY_GAP = 12;
 const MOBILE_BODY_DIVIDER_GAP = 12;
 const MOBILE_DIVIDER_BUTTON_GAP = 10;
-const MOBILE_BUTTON_WIDTH = 260;
-const MOBILE_BUTTON_HEIGHT = 72;
-const MOBILE_BUTTON_FONT_PX = 28;
+const MOBILE_BUTTON_WIDTH = 300;
+const MOBILE_BUTTON_HEIGHT = 86;
+const MOBILE_BUTTON_FONT_PX = 34;
 
 const DIVIDER_WIDTH_RATIO = 0.5;
 
@@ -314,7 +319,8 @@ export default class IntroOverlay {
     // shrink-to-fit loop below as a safety net. Desktop/tablet (FIT) is
     // completely unaffected — this whole branch only ever changes the
     // *values* fed into the exact same layout math beneath it.
-    const isMobile = isEnvelopScaleMode(this.scene);
+    const isMobile = isMobileDevice(this.scene);
+    const isEnvelop = isEnvelopScaleMode(this.scene);
 
     // Restore the desktop line composition after a resize/orientation
     // change too; layout() may run repeatedly during the same scene.
@@ -377,7 +383,8 @@ export default class IntroOverlay {
     let panelHeight = computePanelHeight();
     if (isMobile) {
       const availableHeight = height - ENVELOP_TOP_SAFE_MARGIN_PX - ENVELOP_BOTTOM_SAFE_MARGIN_PX;
-      while (panelHeight > availableHeight && bodyFontPx > MOBILE_BODY_FONT_MIN_PX) {
+      const mobileAvailableHeight = isEnvelop ? availableHeight : height - 40;
+      while (panelHeight > mobileAvailableHeight && bodyFontPx > MOBILE_BODY_FONT_MIN_PX) {
         bodyFontPx -= 1;
         this.bodyText?.setFontSize(bodyFontPx);
         panelHeight = computePanelHeight();

@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, ENVELOP_BOTTOM_SAFE_MARGIN_PX } from './scaleMode';
 
-const BUTTON_SIZE_PX = 56;
-const BUTTON_MARGIN_PX = 18;
+// FIT preserves the complete 3:2 canvas on a wide phone, so each design
+// pixel becomes smaller on the physical display. Keep these mobile-only
+// controls at a comfortable real touch size after that scaling.
+const BUTTON_SIZE_PX = 112;
+const BUTTON_MARGIN_PX = 28;
 const BUTTON_COLOR = 0x241f19;
 const BUTTON_ALPHA = 0.55;
 const BUTTON_STROKE_COLOR = 0xd9cfae;
@@ -181,7 +184,7 @@ export default class MobileHotspotNav {
       .circle(0, 0, half, BUTTON_COLOR, BUTTON_ALPHA)
       .setStrokeStyle(1, BUTTON_STROKE_COLOR, BUTTON_STROKE_ALPHA);
     const arrow = this.scene.add
-      .text(0, 0, glyph, { fontFamily: 'Bellefair, serif', fontSize: '30px', color: `#${BUTTON_ARROW_COLOR.toString(16)}` })
+      .text(0, 0, glyph, { fontFamily: 'Bellefair, serif', fontSize: '58px', color: `#${BUTTON_ARROW_COLOR.toString(16)}` })
       .setOrigin(0.5);
 
     const container = this.scene.add

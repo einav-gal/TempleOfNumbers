@@ -33,6 +33,16 @@ const EXIT_FULLSCREEN_LABEL = 'יציאה ממסך מלא';
 const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 600px)';
 
 function scaleModeForViewport(): Phaser.Scale.ScaleModeType {
+  // The dedicated /mobile/ entry point explicitly promises a complete,
+  // usable mobile layout. ENVELOP cannot provide that for this 3:2 game
+  // on a very wide phone: it physically discards the top and bottom of
+  // the canvas, including fixed UI and navigation controls. Keep the
+  // whole design visible there; the mobile camera/navigation system can
+  // still zoom individual interactive areas inside the intact canvas.
+  const forcedMobile = (window as unknown as { FORCE_MOBILE?: boolean }).FORCE_MOBILE === true;
+  if (forcedMobile) {
+    return Phaser.Scale.FIT;
+  }
   return window.matchMedia(PHONE_LANDSCAPE_QUERY).matches ? Phaser.Scale.ENVELOP : Phaser.Scale.FIT;
 }
 

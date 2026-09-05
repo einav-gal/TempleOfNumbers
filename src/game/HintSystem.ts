@@ -8,7 +8,7 @@ import {
   areAllCrystalsCollected,
   areAllCrystalsPlaced,
 } from './GameState';
-import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
+import { isEnvelopScaleMode, isMobileDevice, ENVELOP_TOP_SAFE_MARGIN_PX } from './scaleMode';
 import {
   HOLDER_MARGIN_X_PX,
   HOLDER_MARGIN_Y_PX,
@@ -144,7 +144,7 @@ export default class HintSystem {
     }).setOrigin(0.5);
 
     this.buttonContainer = this.scene.add.container(0, 0, [bg, label]).setDepth(BUTTON_DEPTH).setScrollFactor(0);
-    if (isEnvelopScaleMode(this.scene)) {
+    if (isMobileDevice(this.scene)) {
       this.buttonContainer.setScale(ENVELOP_BUTTON_SCALE);
     }
 
@@ -192,14 +192,15 @@ export default class HintSystem {
     const height = this.scene.scale.height;
 
     const isEnvelop = isEnvelopScaleMode(this.scene);
+    const isMobile = isMobileDevice(this.scene);
     const holderTopMargin = isEnvelop ? ENVELOP_TOP_SAFE_MARGIN_PX : HOLDER_MARGIN_Y_PX;
     // Both the holder (above) and this button scale up together in
     // ENVELOP mode — their effective (scaled) sizes, not the raw
     // constants, are what actually determine the gap/position on screen.
-    const holderHeight = HOLDER_HEIGHT_PX * (isEnvelop ? ENVELOP_HOLDER_SCALE : 1);
-    const buttonHalf = (BUTTON_SIZE_PX / 2) * (isEnvelop ? ENVELOP_BUTTON_SCALE : 1);
+    const holderHeight = HOLDER_HEIGHT_PX * (isMobile ? ENVELOP_HOLDER_SCALE : 1);
+    const buttonHalf = (BUTTON_SIZE_PX / 2) * (isMobile ? ENVELOP_BUTTON_SCALE : 1);
     const buttonY = holderTopMargin + holderHeight + BUTTON_GAP_BELOW_HOLDER_PX + buttonHalf;
-    const marginX = isEnvelop ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
+    const marginX = isMobile ? ENVELOP_HOLDER_MARGIN_X_PX : HOLDER_MARGIN_X_PX;
     this.buttonContainer?.setPosition(marginX + buttonHalf, buttonY);
 
     if (this.popupContainer) {
