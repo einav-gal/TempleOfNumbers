@@ -4,6 +4,7 @@ type ScrollFactorObject = Phaser.GameObjects.GameObject & {
   cameraFilter: number;
   scrollFactorX?: number;
   scrollFactorY?: number;
+  list?: Phaser.GameObjects.GameObject[];
 };
 
 /**
@@ -73,8 +74,7 @@ export default class FixedUiCamera {
     // filter bit before removing it so no surviving object retains a
     // reference to a camera id that no longer exists.
     for (const gameObject of this.scene.children.list as ScrollFactorObject[]) {
-      gameObject.cameraFilter &= ~uiCamera.id;
-      gameObject.cameraFilter &= ~this.scene.cameras.main.id;
+      this.clearCameraFilters(gameObject, uiCamera.id, this.scene.cameras.main.id);
     }
     this.scene.cameras.remove(uiCamera);
     this.camera = undefined;
@@ -88,16 +88,47 @@ export default class FixedUiCamera {
 
     const mainCamera = this.scene.cameras.main;
     for (const gameObject of this.scene.children.list as ScrollFactorObject[]) {
-      const isFixed = gameObject.scrollFactorX === 0 && gameObject.scrollFactorY === 0;
+      this.routeObject(gameObject, false, mainCamera, uiCamera);
+    }
+  }
 
-      if (isFixed) {
-        // Visible only to the stable UI camera.
-        gameObject.cameraFilter &= ~uiCamera.id;
-        mainCamera.ignore(gameObject);
-      } else {
-        // Visible only to the zoomable/pannable world camera.
-        gameObject.cameraFilter &= ~mainCamera.id;
-        uiCamera.ignore(gameObject);
+  /**
+   * Containers are only the transform parent; Phaser renders each child
+   * GameObject separately and checks that child's cameraFilter. Ignoring
+   * only the outer Container therefore left its frame/text/icons on the
+   * zoomed world camera. Carry a fixed parent state recursively so every
+   * descendant of a scrollFactor(0) UI container is routed with it.
+   */
+  private routeObject(
+    gameObject: ScrollFactorObject,
+    parentIsFixed: boolean,
+    mainCamera: Phaser.Cameras.Scene2D.Camera,
+    uiCamera: Phaser.Cameras.Scene2D.Camera,
+  ): void {
+    const isFixed =
+      parentIsFixed || (gameObject.scrollFactorX === 0 && gameObject.scrollFactorY === 0);
+
+    if (isFixed) {
+      gameObject.cameraFilter &= ~uiCamera.id;
+      mainCamera.ignore(gameObject);
+    } else {
+      gameObject.cameraFilter &= ~mainCamera.id;
+      uiCamera.ignore(gameObject);
+    }
+
+    if (Array.isArray(gameObject.list)) {
+      for (const child of gameObject.list as ScrollFactorObject[]) {
+        this.routeObject(child, isFixed, mainCamera, uiCamera);
+      }
+    }
+  }
+
+  private clearCameraFilters(gameObject: ScrollFactorObject, uiCameraId: number, mainCameraId: number): void {
+    gameObject.cameraFilter &= ~uiCameraId;
+    gameObject.cameraFilter &= ~mainCameraId;
+    if (Array.isArray(gameObject.list)) {
+      for (const child of gameObject.list as ScrollFactorObject[]) {
+        this.clearCameraFilters(child, uiCameraId, mainCameraId);
       }
     }
   }
