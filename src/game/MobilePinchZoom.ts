@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isMobileDevice } from './scaleMode';
 
 // TEMPORARY diagnostic — logs pointer/world/camera state and the
 // clicked object's name on every pointerdown, to verify clicks actually
@@ -27,6 +28,18 @@ const PAN_ACTIVE_THRESHOLD_PX = 4;
 // the normal path didn't fire, without changing that normal path at all.
 const MAX_SUPPRESS_CLICKS_MS = 1500;
 
+// Accessible mobile fallback for players who find a two-finger gesture
+// awkward or unreliable. The controls are deliberately Phaser UI (not a
+// second CSS overlay), so FixedUiCamera can keep them stable while the
+// world camera zooms beneath them.
+const ZOOM_BUTTON_SIZE_PX = 108;
+const ZOOM_BUTTON_GAP_PX = 20;
+const ZOOM_BUTTON_MARGIN_PX = 28;
+const ZOOM_BUTTON_DEPTH = 90;
+const ZOOM_BUTTON_STEP = 0.4;
+const ZOOM_BUTTON_COLOR = 0x241f19;
+const ZOOM_BUTTON_STROKE = 0xd9cfae;
+
 interface TouchPoint {
   x: number;
   y: number;
@@ -40,13 +53,10 @@ interface TouchPoint {
  * assignment — never CSS transform, never resizing the canvas element,
  * never a browser-level zoom. Phaser's own input system then hit-tests
  * every ordinary game object against that same camera automatically, so
- * nothing here does manual screen-coordinate hit testing, and this class
- * never creates ANY interactive Phaser object of its own (not even a
- * small one) — the single global "reset zoom" control is a plain HTML
- * button over the canvas (see index.html / main.ts), which reads/drives
- * this class only through `MobilePinchZoom.getActive()` (the
- * currently-active scene's instance) and never touches Phaser's input
- * system at all.
+ * nothing here does manual screen-coordinate hit testing. On mobile it
+ * also exposes fixed +/− controls as an accessible alternative to the
+ * gesture; the global HTML reset control can still restore the complete
+ * view through `MobilePinchZoom.getActive()`.
  *
  * DELIBERATELY NO SINGLE-FINGER PAN: an earlier version also let a single
  * finger drag-pan the camera once zoomed in, but that gesture is
@@ -149,6 +159,8 @@ export default class MobilePinchZoom {
   private suppressClicksTimer?: Phaser.Time.TimerEvent;
   /** Safety-net timer — see MAX_SUPPRESS_CLICKS_MS above. Reset every time a fresh pinch/pan begins, cleared whenever suppressClicks clears through any path. */
   private forceClearSuppressTimer?: Phaser.Time.TimerEvent;
+  private zoomInButton?: Phaser.GameObjects.Container;
+  private zoomOutButton?: Phaser.GameObjects.Container;
 
   private readonly handleTouchStart = (event: TouchEvent) => this.onTouchStart(event);
   private readonly handleTouchMove = (event: TouchEvent) => this.onTouchMove(event);
@@ -167,7 +179,10 @@ export default class MobilePinchZoom {
   // RESULT of one (see the RESIZE listener in create()), so doing so
   // again here would recurse. The public reset() below is the one that
   // also triggers a refresh, for external callers (the HTML button).
-  private readonly handleResize = () => this.resetCameraAndGestureState();
+  private readonly handleResize = () => {
+    this.resetCameraAndGestureState();
+    this.positionZoomButtons();
+  };
   private readonly handleDebugPointerDown = (pointer: Phaser.Input.Pointer) => this.logDebugPointerDown(pointer);
   private readonly handleDebugGameObjectDown = (
     pointer: Phaser.Input.Pointer,
@@ -194,6 +209,12 @@ export default class MobilePinchZoom {
     // main.ts, which calls game.scale.refresh() for all three) — always
     // lands back on a clean zoom=1, centered camera.
     this.scene.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize);
+
+    if (isMobileDevice(this.scene)) {
+      this.zoomInButton = this.createZoomButton('+', ZOOM_BUTTON_STEP);
+      this.zoomOutButton = this.createZoomButton('−', -ZOOM_BUTTON_STEP);
+      this.positionZoomButtons();
+    }
 
     if (DEBUG_LOG_CLICKS) {
       // Read-only diagnostics via Phaser's own input system — never part
@@ -281,6 +302,8 @@ export default class MobilePinchZoom {
     }
     this.suppressClicksTimer?.remove();
     this.forceClearSuppressTimer?.remove();
+    this.zoomInButton?.destroy();
+    this.zoomOutButton?.destroy();
     if (MobilePinchZoom.activeInstance === this) {
       MobilePinchZoom.activeInstance = undefined;
     }
@@ -457,6 +480,54 @@ export default class MobilePinchZoom {
       viewHeight >= this.worldBounds.height
         ? this.worldBounds.centerY - viewHeight / 2
         : Phaser.Math.Clamp(camera.scrollY, this.worldBounds.top, this.worldBounds.bottom - viewHeight);
+  }
+
+  // ---- explicit mobile zoom controls ---------------------------------
+
+  private createZoomButton(glyph: string, delta: number): Phaser.GameObjects.Container {
+    const half = ZOOM_BUTTON_SIZE_PX / 2;
+    const background = this.scene.add
+      .circle(0, 0, half, ZOOM_BUTTON_COLOR, 0.82)
+      .setStrokeStyle(3, ZOOM_BUTTON_STROKE, 0.9);
+    const label = this.scene.add
+      .text(0, -2, glyph, {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '58px',
+        color: '#f2e9d8',
+      })
+      .setOrigin(0.5);
+    const button = this.scene.add
+      .container(0, 0, [background, label])
+      .setScrollFactor(0)
+      .setDepth(ZOOM_BUTTON_DEPTH)
+      .setSize(ZOOM_BUTTON_SIZE_PX, ZOOM_BUTTON_SIZE_PX)
+      .setInteractive(new Phaser.Geom.Circle(0, 0, half), Phaser.Geom.Circle.Contains);
+    if (button.input) {
+      button.input.cursor = 'pointer';
+    }
+    button.on(Phaser.Input.Events.POINTER_DOWN, () => this.zoomByStep(delta));
+    return button;
+  }
+
+  private positionZoomButtons(): void {
+    const half = ZOOM_BUTTON_SIZE_PX / 2;
+    const x = this.scene.scale.width - ZOOM_BUTTON_MARGIN_PX - half;
+    const zoomInY = this.scene.scale.height - ZOOM_BUTTON_MARGIN_PX - half;
+    const zoomOutY = zoomInY - ZOOM_BUTTON_SIZE_PX - ZOOM_BUTTON_GAP_PX;
+    this.zoomInButton?.setPosition(x, zoomInY);
+    this.zoomOutButton?.setPosition(x, zoomOutY);
+  }
+
+  private zoomByStep(delta: number): void {
+    if (!this.isEnabled || !this.scene.input.enabled) {
+      return;
+    }
+    const camera = this.scene.cameras.main;
+    const center = camera.getWorldPoint(this.scene.scale.width / 2, this.scene.scale.height / 2);
+    const nextZoom = Phaser.Math.Clamp(camera.zoom + delta, MIN_ZOOM, MAX_ZOOM);
+    camera.setZoom(nextZoom);
+    camera.centerOn(center.x, center.y);
+    this.clampScrollToWorldBounds(camera);
   }
 
   // ---- click suppression (the ONLY code that ever touches scene.input.enabled) ----

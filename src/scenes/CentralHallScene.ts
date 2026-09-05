@@ -162,8 +162,8 @@ const WHEEL_ENTRY_MAX_ZOOM = 5;
 // background zoom still read as "too small, hard to tap" while trying to
 // keep the whole spread-out hall in frame — so on an actual mobile device
 // the camera instead fills the viewport with exactly one of these
-// bg-px-measured areas, and the player steps between them via
-// MobileHotspotNav's own arrow buttons.
+// bg-px-measured areas, and the player opens them directly from
+// MobileHotspotNav's labelled destination buttons.
 //
 // Live-device feedback on the first draft: still too much bare background
 // showing on the sides of the actual clickable object, making it read as
@@ -561,6 +561,15 @@ export default class CentralHallScene extends Phaser.Scene {
       ];
       const hotspots: Hotspot[] = boxes.map((box) => ({
         id: box.id,
+        label:
+          box.id === 'crystal'
+            ? 'הגביש המרכזי'
+            : box.id === 'mechanism'
+              ? 'הכניסה ליד הפסל'
+              : box.id === 'wheel'
+                ? 'הכניסה בגלגל'
+                : 'הכניסה ברצפה',
+        minZoom: box.id === 'crystal' ? 1.6 : box.id === 'mechanism' ? 1.9 : undefined,
         bounds: new Phaser.Geom.Rectangle(
           toScreenX(box.cx - box.w / 2),
           toScreenY(box.cy - box.h / 2),
