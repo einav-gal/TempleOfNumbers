@@ -193,8 +193,10 @@ export default class Room3Scene extends Phaser.Scene {
     this.pinchZoom = new MobilePinchZoom(this);
     this.pinchZoom.create();
 
-    this.fixedUiCamera = new FixedUiCamera(this);
-    this.fixedUiCamera.create();
+    if (isMobileDevice(this)) {
+      this.fixedUiCamera = new FixedUiCamera(this);
+      this.fixedUiCamera.create();
+    }
 
     this.layout(this.scale.width, this.scale.height);
     this.startCrystalHover();

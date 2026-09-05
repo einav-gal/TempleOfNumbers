@@ -6,7 +6,7 @@ import CrystalHolder from '../game/CrystalHolder';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 import FixedUiCamera from '../game/FixedUiCamera';
 import { getLibraRoomState } from '../game/GameState';
-import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
+import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR, isMobileDevice } from '../game/scaleMode';
 
 const BACKGROUND_KEY = 'libra-room-background';
 const PUZZLE_DEPTH = 5;
@@ -109,8 +109,10 @@ export default class LibraRoomScene extends Phaser.Scene {
     this.pinchZoom = new MobilePinchZoom(this);
     this.pinchZoom.create();
 
-    this.fixedUiCamera = new FixedUiCamera(this);
-    this.fixedUiCamera.create();
+    if (isMobileDevice(this)) {
+      this.fixedUiCamera = new FixedUiCamera(this);
+      this.fixedUiCamera.create();
+    }
 
     if (getLibraRoomState(this.registry).completed) {
       this.puzzle.restoreCompleted();

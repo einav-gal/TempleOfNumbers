@@ -7,7 +7,7 @@ import CrystalHolder from '../game/CrystalHolder';
 import MobilePinchZoom from '../game/MobilePinchZoom';
 import FixedUiCamera from '../game/FixedUiCamera';
 import { getPinkRoomState } from '../game/GameState';
-import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR } from '../game/scaleMode';
+import { isEnvelopScaleMode, ENVELOP_EXTRA_ZOOM_FACTOR, isMobileDevice } from '../game/scaleMode';
 
 const BACKGROUND_KEY = 'pink-room-background';
 // Raised from an earlier 3 so the equivalence puzzle's rings (which sit
@@ -98,8 +98,10 @@ export default class PinkRoomScene extends Phaser.Scene {
     this.pinchZoom = new MobilePinchZoom(this);
     this.pinchZoom.create();
 
-    this.fixedUiCamera = new FixedUiCamera(this);
-    this.fixedUiCamera.create();
+    if (isMobileDevice(this)) {
+      this.fixedUiCamera = new FixedUiCamera(this);
+      this.fixedUiCamera.create();
+    }
 
     this.layout(this.scale.width, this.scale.height);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);

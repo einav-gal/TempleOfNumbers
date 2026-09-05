@@ -40,6 +40,20 @@ const BODY_TEXT = [
   'כדי לצאת מהמקדש.',
 ].join('\n');
 
+// A short landscape phone has much more horizontal than vertical room.
+// Preserve the exact introduction, but use that width instead of forcing
+// the desktop's deliberately narrow 12-line composition into the cropped
+// ENVELOP band.
+const MOBILE_BODY_TEXT = [
+  'הגביש המרכזי איבד את כוחו, והחדרים הנסתרים ננעלו.',
+  '',
+  'חקרו את האולם. גלו את הכניסות. פתרו את האתגרים המתמטיים.',
+  '',
+  'כל אתגר שתשלימו ישיב לגביש חלק מכוחו.',
+  '',
+  'העירו את הגביש כדי לצאת מהמקדש.',
+].join('\n');
+
 const BUTTON_TEXT = 'כניסה למקדש';
 const BUTTON_WIDTH = 190;
 const BUTTON_HEIGHT = 56;
@@ -51,7 +65,7 @@ const LINE_SPACING_PX = 6;
 // A short phone held sideways (ENVELOP scale mode — see scaleMode.ts)
 // has plenty of *width* to spare (ENVELOP never crops horizontally) but
 // a cropped *height* budget — so the panel goes noticeably wider and its
-// title/button grow, while the (12-line) body text only grows a little
+// title/button grow, while the body uses a shorter landscape composition
 // and its line spacing/gaps tighten, with an explicit shrink-to-fit floor
 // (see layout()) as a safety net against the panel ever exceeding the
 // visible vertical band.
@@ -301,6 +315,10 @@ export default class IntroOverlay {
     // completely unaffected — this whole branch only ever changes the
     // *values* fed into the exact same layout math beneath it.
     const isMobile = isEnvelopScaleMode(this.scene);
+
+    // Restore the desktop line composition after a resize/orientation
+    // change too; layout() may run repeatedly during the same scene.
+    this.bodyText?.setText(isMobile ? MOBILE_BODY_TEXT : BODY_TEXT);
 
     const panelWidthRatio = isMobile ? MOBILE_PANEL_WIDTH_RATIO : PANEL_WIDTH_RATIO;
     const panelMaxWidth = isMobile ? MOBILE_PANEL_MAX_WIDTH : PANEL_MAX_WIDTH;

@@ -20,6 +20,11 @@ const RING_FRONT_FRONT_KEY = 'heart-ring-front-front';
 // All sizes are in background-image pixels (1536x1024 hall source), so the
 // whole assembly scales together with the hall artwork.
 const CRYSTAL_HEIGHT_BG_PX = 300;
+// On the dedicated mobile experience the hall needs to remain readable
+// around its central mechanism: the wall and floor entrances are part of
+// the navigation, not decoration. Scale the complete crystal-and-rings
+// assembly down together, while leaving the desktop artwork unchanged.
+const MOBILE_ASSEMBLY_SCALE_FACTOR = 0.76;
 // Lift of the crystal's base above the pedestal center, so the crystal
 // hovers centered over the platform instead of resting on the stone.
 const CRYSTAL_HOVER_BG_PX = 45;
@@ -339,17 +344,20 @@ export default class HeartOfTheTemple {
     this.lastPedestalCenterX = pedestalCenterX;
     this.lastPedestalCenterY = pedestalCenterY;
 
-    this.assemblyScale = scale;
-    this.crystalBaseScale = (CRYSTAL_HEIGHT_BG_PX / this.crystal.height) * scale;
+    const assemblyScale = scale * (isMobileDevice(this.scene) ? MOBILE_ASSEMBLY_SCALE_FACTOR : 1);
+
+    this.assemblyScale = assemblyScale;
+    this.crystalBaseScale = (CRYSTAL_HEIGHT_BG_PX / this.crystal.height) * assemblyScale;
     this.applyCrystalScale();
     this.crystal.setX(pedestalCenterX);
-    this.crystalBaseY = pedestalCenterY - CRYSTAL_HOVER_BG_PX * scale;
+    this.crystalBaseY = pedestalCenterY - CRYSTAL_HOVER_BG_PX * assemblyScale;
     this.applyCrystalFloat();
 
     // Ring centers are placed relative to the hovering crystal's midpoint.
-    const crystalCenterY = pedestalCenterY - (CRYSTAL_HOVER_BG_PX + CRYSTAL_HEIGHT_BG_PX / 2) * scale;
+    const crystalCenterY =
+      pedestalCenterY - (CRYSTAL_HOVER_BG_PX + CRYSTAL_HEIGHT_BG_PX / 2) * assemblyScale;
     for (const ring of this.rings) {
-      this.applyRingTransform(ring, pedestalCenterX, crystalCenterY, scale);
+      this.applyRingTransform(ring, pedestalCenterX, crystalCenterY, assemblyScale);
     }
   }
 

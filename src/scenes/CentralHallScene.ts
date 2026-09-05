@@ -197,7 +197,18 @@ const FLOOR_ENTRANCE_HOTSPOT: HotspotBox = {
 // full spread CrystalPlacementMode's slots/tray need once active — so
 // this box is computed per-layout from live game state (see layout()),
 // not a single fixed constant like the others.
-const CRYSTAL_HOTSPOT_BEFORE_COLLECTION: HotspotBox = { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 580, w: 340, h: 440 };
+// The first mobile view is an overview of the central hall, not a tight
+// crystal close-up. It deliberately includes the wall mechanism above
+// and the floor entrance below/right, so players immediately understand
+// that the hall contains several routes. Desktop never installs
+// MobileHotspotNav, so its framing is unaffected.
+const CRYSTAL_HOTSPOT_BEFORE_COLLECTION: HotspotBox = {
+  id: 'crystal',
+  cx: PEDESTAL_CENTER_X,
+  cy: 560,
+  w: 950,
+  h: 620,
+};
 const CRYSTAL_HOTSPOT_WITH_PLACEMENT: HotspotBox = { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 670, w: 520, h: 660 };
 
 export default class CentralHallScene extends Phaser.Scene {
@@ -430,8 +441,10 @@ export default class CentralHallScene extends Phaser.Scene {
     // scrollFactor(0) alone does not opt UI out of that zoom, so route all
     // fixed UI through a stable second camera before the first layout can
     // focus a hotspot.
-    this.fixedUiCamera = new FixedUiCamera(this);
-    this.fixedUiCamera.create();
+    if (isMobileDevice(this)) {
+      this.fixedUiCamera = new FixedUiCamera(this);
+      this.fixedUiCamera.create();
+    }
 
     // Audio may only start after a user gesture.
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => this.ambience.start());
@@ -471,7 +484,7 @@ export default class CentralHallScene extends Phaser.Scene {
     });
 
     this.cameras.main.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
-    this.fixedUiCamera.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
+    this.fixedUiCamera?.fadeIn(FADE_IN_DURATION_MS, 0, 0, 0);
   }
 
   /**
