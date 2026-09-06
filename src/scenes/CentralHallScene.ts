@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import backgroundUrl from '../../assets/images/central-hall/background-without-wheel.png';
+import mobileBackgroundUrl from '../../assets/images/central-hall/central-hall-mobile.png';
 import potUrl from '../../assets/images/central-hall/Pot/pot.png';
 import HeartOfTheTemple from '../game/HeartOfTheTemple';
 import Atmosphere from '../game/Atmosphere';
@@ -13,7 +14,7 @@ import IntroOverlay from '../game/IntroOverlay';
 import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
 import MobilePinchZoom from '../game/MobilePinchZoom';
-import MobileHotspotNav, { Hotspot } from '../game/MobileHotspotNav';
+import MobilePanoramaNav from '../game/MobilePanoramaNav';
 import FixedUiCamera from '../game/FixedUiCamera';
 import CrystalPlacementMode from '../game/CrystalPlacementMode';
 import HintSystem from '../game/HintSystem';
@@ -38,6 +39,7 @@ import handleUrl from '../../assets/images/central-hall/handle/handle.png';
 import statueUrl from '../../assets/images/central-hall/statue/left-statue-background-matched.png';
 
 const BACKGROUND_KEY = 'central-hall-background';
+const MOBILE_BACKGROUND_KEY = 'central-hall-mobile-background';
 const POT_KEY = 'central-hall-pot';
 const HANDLE_KEY = 'central-hall-handle';
 const STATUE_KEY = 'central-hall-statue';
@@ -153,63 +155,22 @@ const WALL_WHEEL_CENTER_X = 768;
 const WALL_WHEEL_CENTER_Y = 286;
 const WALL_WHEEL_WIDTH_BG = 185;
 
+// Dedicated panoramic composition used only by /mobile/. Coordinates are
+// measured in the 1870x841 mobile background. Desktop continues to use
+// every original constant above unchanged.
+const MOBILE_HALL = {
+  pedestal: { x: 935, y: 565 },
+  statue: { x: 175, baseY: 515, heightBg: 360 },
+  entrance: { widthBg: 155, heightBg: 315 },
+  pot: { x: 330, baseY: 535, heightBg: 125 },
+  handle: { x: 265, y: 455, widthBg: 64 },
+  wheel: { x: 1182, y: 215, widthBg: 205 },
+  floorEntrance: { x: 1515, y: 700, widthBg: 210 },
+} as const;
+
 const WHEEL_ENTRY_DURATION_MS = 850;
 const WHEEL_ENTRY_FILL_FRACTION = 0.7;
 const WHEEL_ENTRY_MAX_ZOOM = 5;
-
-// Mobile "one focus at a time" navigation (see MobileHotspotNav.ts):
-// real-device feedback showed that even an aggressively boosted
-// background zoom still read as "too small, hard to tap" while trying to
-// keep the whole spread-out hall in frame — so on an actual mobile device
-// the camera instead fills the viewport with exactly one of these
-// bg-px-measured areas, and the player opens them directly from
-// MobileHotspotNav's labelled destination buttons.
-//
-// Live-device feedback on the first draft: still too much bare background
-// showing on the sides of the actual clickable object, making it read as
-// small even once "in frame" — these are cropped much tighter around each
-// object's own real size (crystal ~300 tall, handle 55 wide, wall wheel
-// 185 wide, floor entrance 140 wide, etc.) rather than a generous
-// catch-all box. Still first-draft values, expected to need further
-// live-device tuning like every other numeric constant in this project.
-interface HotspotBox {
-  id: string;
-  cx: number;
-  cy: number;
-  w: number;
-  h: number;
-}
-// Pot / hidden handle / statue / hidden entrance — tightly clustered in
-// the same corner (see the coordinate audit in PROJECT_STATE.md); the
-// cluster's own real horizontal spread is narrow (handle only 55bg-px
-// wide, entrance 145), so this box is far narrower than it is tall.
-const MECHANISM_HOTSPOT: HotspotBox = { id: 'mechanism', cx: 475, cy: 510, w: 220, h: 520 };
-const WHEEL_HOTSPOT: HotspotBox = { id: 'wheel', cx: WALL_WHEEL_CENTER_X, cy: WALL_WHEEL_CENTER_Y, w: 220, h: 220 };
-const FLOOR_ENTRANCE_HOTSPOT: HotspotBox = {
-  id: 'floor-entrance',
-  cx: FLOOR_ENTRANCE_CENTER_X,
-  cy: FLOOR_ENTRANCE_CENTER_Y,
-  w: 200,
-  h: 170,
-};
-// The crystal's own true clickable size (~300 tall, centered ~195bg-px
-// above the pedestal — see HeartOfTheTemple.ts) is much smaller than the
-// full spread CrystalPlacementMode's slots/tray need once active — so
-// this box is computed per-layout from live game state (see layout()),
-// not a single fixed constant like the others.
-// The first mobile view is an overview of the central hall, not a tight
-// crystal close-up. It deliberately includes the wall mechanism above
-// and the floor entrance below/right, so players immediately understand
-// that the hall contains several routes. Desktop never installs
-// MobileHotspotNav, so its framing is unaffected.
-const CRYSTAL_HOTSPOT_BEFORE_COLLECTION: HotspotBox = {
-  id: 'crystal',
-  cx: PEDESTAL_CENTER_X,
-  cy: 560,
-  w: 950,
-  h: 620,
-};
-const CRYSTAL_HOTSPOT_WITH_PLACEMENT: HotspotBox = { id: 'crystal', cx: PEDESTAL_CENTER_X, cy: 670, w: 520, h: 660 };
 
 export default class CentralHallScene extends Phaser.Scene {
   private background?: Phaser.GameObjects.Image;
@@ -225,7 +186,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private crystalHolder?: CrystalHolder;
   private wallWheel?: WallWheel;
   private pinchZoom?: MobilePinchZoom;
-  private hotspotNav?: MobileHotspotNav;
+  private panoramaNav?: MobilePanoramaNav;
   private fixedUiCamera?: FixedUiCamera;
   private crystalPlacementMode?: CrystalPlacementMode;
   private hintSystem?: HintSystem;
@@ -239,6 +200,7 @@ export default class CentralHallScene extends Phaser.Scene {
   private isEnteringLibraRoom = false;
   private isEnteringRoom3 = false;
   private backgroundScale = 1;
+  private mobileLayout = false;
   private popup?: Phaser.GameObjects.Container;
   private popupOverlay?: Phaser.GameObjects.Rectangle;
   private lastPopupToggleAt = -Infinity;
@@ -249,13 +211,19 @@ export default class CentralHallScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image(BACKGROUND_KEY, backgroundUrl);
+    if (isMobileDevice(this)) {
+      this.load.image(MOBILE_BACKGROUND_KEY, mobileBackgroundUrl);
+    } else {
+      this.load.image(BACKGROUND_KEY, backgroundUrl);
+    }
     this.load.image(POT_KEY, potUrl);
     this.load.image(HANDLE_KEY, handleUrl);
     this.load.image(STATUE_KEY, statueUrl);
     HeartOfTheTemple.preload(this);
     WallWheel.preload(this);
-    Atmosphere.preload(this);
+    if (!isMobileDevice(this)) {
+      Atmosphere.preload(this);
+    }
     IntroOverlay.preload(this);
   }
 
@@ -277,10 +245,17 @@ export default class CentralHallScene extends Phaser.Scene {
     this.isEnteringPinkRoom = false;
     this.isEnteringLibraRoom = false;
     this.isEnteringRoom3 = false;
+    this.mobileLayout = isMobileDevice(this);
 
-    this.background = this.add.image(0, 0, BACKGROUND_KEY);
+    this.background = this.add.image(
+      0,
+      0,
+      this.mobileLayout ? MOBILE_BACKGROUND_KEY : BACKGROUND_KEY,
+    );
 
-    this.wallWheel = new WallWheel(this, { widthBg: WALL_WHEEL_WIDTH_BG });
+    this.wallWheel = new WallWheel(this, {
+      widthBg: this.mobileLayout ? MOBILE_HALL.wheel.widthBg : WALL_WHEEL_WIDTH_BG,
+    });
     this.wallWheel.create(WALL_WHEEL_DEPTH);
     this.wallWheel.onOpened = () => setWallWheelOpen(this.registry);
     this.wallWheel.onActivate = () => this.enterRoom3ThroughWheel();
@@ -323,19 +298,12 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.setDimmed(true);
     }
 
-    // Mobile (see isMobileDevice() — real device OR the dedicated
-    // /mobile/ link) gets the "one focus at a time" hotspot navigator
-    // instead of free-roam pinch/pan: the two don't compose (both would
-    // fight over camera.zoom/scroll), and hotspot nav is what actually
-    // solves "too small to tap" — see MobileHotspotNav.ts. Desktop/tablet
-    // keeps the existing pinch-to-zoom. Kept off while the intro overlay
-    // is showing (see below) — that overlay isn't camera-scroll-
-    // independent, so zooming/panning underneath it would visually
-    // misalign it; every other interaction here already gates on it
-    // having been dismissed.
-    if (isMobileDevice(this)) {
-      this.hotspotNav = new MobileHotspotNav(this);
-      this.hotspotNav.create();
+    // The dedicated mobile build is one continuous panoramic hall. Edge
+    // arrows move across it horizontally without exposing destination
+    // names; desktop keeps its existing interaction unchanged.
+    if (this.mobileLayout) {
+      this.panoramaNav = new MobilePanoramaNav(this);
+      this.panoramaNav.create();
     } else {
       this.pinchZoom = new MobilePinchZoom(this);
       this.pinchZoom.create();
@@ -359,24 +327,37 @@ export default class CentralHallScene extends Phaser.Scene {
     // resolved" path above, so a returning visit never replays it).
     this.heart.onMechanismShattered = () => this.openFinalStagePopup();
 
-    this.atmosphere = new Atmosphere(this);
-    this.atmosphere.create();
+    // The mobile panoramic artwork already contains its own torches.
+    // Keeping the animated desktop fire there would create duplicates.
+    if (!this.mobileLayout) {
+      this.atmosphere = new Atmosphere(this);
+      this.atmosphere.create();
+    }
 
     // Created before the statue so it renders behind it at every step
     // (ENTRANCE_DEPTH < STATUE_DEPTH); starts fully transparent and
     // non-interactive until the statue has fully opened.
-    this.entrance = new Entrance(this, ENTRANCE_SIZE);
+    this.entrance = new Entrance(
+      this,
+      this.mobileLayout ? MOBILE_HALL.entrance : ENTRANCE_SIZE,
+    );
     this.entrance.create(ENTRANCE_DEPTH);
     this.entrance.onActivate = () => this.enterThroughLeftDoor();
 
-    this.statue = new Statue(this, STATUE_KEY, { heightBg: STATUE_HEIGHT_BG });
+    this.statue = new Statue(this, STATUE_KEY, {
+      heightBg: this.mobileLayout ? MOBILE_HALL.statue.heightBg : STATUE_HEIGHT_BG,
+    });
     this.statue.create(STATUE_DEPTH);
 
-    this.handle = new Handle(this, HANDLE_KEY, { widthBg: HANDLE_WIDTH_BG });
+    this.handle = new Handle(this, HANDLE_KEY, {
+      widthBg: this.mobileLayout ? MOBILE_HALL.handle.widthBg : HANDLE_WIDTH_BG,
+    });
     this.handle.create(HANDLE_DEPTH);
     this.handle.onActivate = () => this.openStatueEntrance();
 
-    this.pot = new Pot(this, POT_KEY, { heightBg: POT_HEIGHT_BG });
+    this.pot = new Pot(this, POT_KEY, {
+      heightBg: this.mobileLayout ? MOBILE_HALL.pot.heightBg : POT_HEIGHT_BG,
+    });
     this.pot.create(POT_DEPTH);
     this.pot.onMoved = () => this.handle?.reveal();
 
@@ -396,7 +377,9 @@ export default class CentralHallScene extends Phaser.Scene {
     // through it or through the Pink Room itself. Visible, glowing, and
     // clickable from the moment create() runs (see FloorEntrance.create())
     // — not gated behind any other room's progress or reward.
-    this.floorEntrance = new FloorEntrance(this, { widthBg: FLOOR_ENTRANCE_WIDTH_BG });
+    this.floorEntrance = new FloorEntrance(this, {
+      widthBg: this.mobileLayout ? MOBILE_HALL.floorEntrance.widthBg : FLOOR_ENTRANCE_WIDTH_BG,
+    });
     this.floorEntrance.create(FLOOR_ENTRANCE_DEPTH);
     this.floorEntrance.onOpened = () => setFloorEntranceOpen(this.registry);
     this.floorEntrance.onActivate = () => this.enterLibraRoomThroughStairs();
@@ -424,7 +407,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.heart.setSuppressed(true);
       this.pot.setActive(false);
       this.pinchZoom?.disable();
-      this.hotspotNav?.disable();
+      this.panoramaNav?.disable();
 
       this.intro = new IntroOverlay(this);
       this.intro.create();
@@ -433,15 +416,15 @@ export default class CentralHallScene extends Phaser.Scene {
         this.heart?.setSuppressed(false);
         this.pot?.setActive(true);
         this.pinchZoom?.enable();
-        this.hotspotNav?.enable();
+        this.panoramaNav?.enable();
       };
     }
 
-    // MobileHotspotNav and pinch gestures zoom the world camera. Phaser's
+    // Panorama navigation and pinch gestures move the world camera. Phaser's
     // scrollFactor(0) alone does not opt UI out of that zoom, so route all
     // fixed UI through a stable second camera before the first layout can
     // focus a hotspot.
-    if (isMobileDevice(this)) {
+    if (this.mobileLayout) {
       this.fixedUiCamera = new FixedUiCamera(this);
       this.fixedUiCamera.create();
     }
@@ -477,7 +460,7 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.destroy();
       this.wallWheel?.destroy();
       this.pinchZoom?.destroy();
-      this.hotspotNav?.destroy();
+      this.panoramaNav?.destroy();
       this.fixedUiCamera?.destroy();
       this.crystalPlacementMode?.destroy();
       this.hintSystem?.destroy();
@@ -524,18 +507,13 @@ export default class CentralHallScene extends Phaser.Scene {
       return;
     }
 
-    // Cover the window: scale proportionally so the image always fills it,
-    // cropping the overflow edges instead of distorting. On short
-    // phone-landscape screens (ENVELOP), boosted a bit further (see
-    // ENVELOP_EXTRA_ZOOM_FACTOR) — real-device feedback that everything
-    // looked too small/distant there. World content only; screen-fixed UI
-    // (CrystalHolder, HintSystem, popups) is untouched by this. On an
-    // actual mobile device, MobileHotspotNav's own camera pan/zoom (below)
-    // provides all the "make it bigger" framing instead, so this stays at
-    // the plain desktop/tablet value there.
-    this.backgroundScale =
-      Math.max(width / this.background.width, height / this.background.height) *
-      (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
+    // Mobile fits the panoramic artwork to the full logical height. Its
+    // resulting width is intentionally larger than the viewport and the
+    // camera pans across it. Desktop retains the original cover formula.
+    this.backgroundScale = this.mobileLayout
+      ? height / this.background.height
+      : Math.max(width / this.background.width, height / this.background.height) *
+        (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
     this.background
       .setScale(this.backgroundScale)
       .setPosition(width / 2, height / 2);
@@ -552,45 +530,45 @@ export default class CentralHallScene extends Phaser.Scene {
       ),
     );
 
-    if (this.hotspotNav) {
-      const boxes: HotspotBox[] = [
-        this.crystalPlacementMode ? CRYSTAL_HOTSPOT_WITH_PLACEMENT : CRYSTAL_HOTSPOT_BEFORE_COLLECTION,
-        MECHANISM_HOTSPOT,
-        WHEEL_HOTSPOT,
-        FLOOR_ENTRANCE_HOTSPOT,
-      ];
-      const hotspots: Hotspot[] = boxes.map((box) => ({
-        id: box.id,
-        label:
-          box.id === 'crystal'
-            ? 'הגביש המרכזי'
-            : box.id === 'mechanism'
-              ? 'הכניסה ליד הפסל'
-              : box.id === 'wheel'
-                ? 'הכניסה בגלגל'
-                : 'הכניסה ברצפה',
-        minZoom: box.id === 'crystal' ? 1.6 : box.id === 'mechanism' ? 1.9 : undefined,
-        bounds: new Phaser.Geom.Rectangle(
-          toScreenX(box.cx - box.w / 2),
-          toScreenY(box.cy - box.h / 2),
-          box.w * this.backgroundScale,
-          box.h * this.backgroundScale,
-        ),
-      }));
-      this.hotspotNav.setHotspots(hotspots);
+    if (this.panoramaNav) {
+      const worldLeft = toScreenX(0);
+      const worldTop = toScreenY(0);
+      const worldWidth = this.background.width * this.backgroundScale;
+      const worldHeight = this.background.height * this.backgroundScale;
+      this.cameras.main.setBounds(worldLeft, worldTop, worldWidth, worldHeight);
+      this.panoramaNav.setViewpoints([
+        { id: 'left', centerX: toScreenX(250) },
+        { id: 'center', centerX: toScreenX(MOBILE_HALL.pedestal.x) },
+        { id: 'right', centerX: toScreenX(1620) },
+      ]);
     }
 
     this.overlay?.setSize(width, height);
 
-    this.wallWheel?.layout(
-      toScreenX(WALL_WHEEL_CENTER_X),
-      toScreenY(WALL_WHEEL_CENTER_Y),
-      this.backgroundScale,
-    );
+    const pedestal = this.mobileLayout
+      ? MOBILE_HALL.pedestal
+      : { x: PEDESTAL_CENTER_X, y: PEDESTAL_CENTER_Y };
+    const statue = this.mobileLayout
+      ? MOBILE_HALL.statue
+      : { x: STATUE_CENTER_X, baseY: STATUE_BASE_Y };
+    const handle = this.mobileLayout
+      ? MOBILE_HALL.handle
+      : { x: HANDLE_CENTER_X, y: HANDLE_CENTER_Y };
+    const pot = this.mobileLayout
+      ? MOBILE_HALL.pot
+      : { x: POT_BASE_X, baseY: POT_BASE_Y };
+    const wheel = this.mobileLayout
+      ? MOBILE_HALL.wheel
+      : { x: WALL_WHEEL_CENTER_X, y: WALL_WHEEL_CENTER_Y };
+    const floorEntrance = this.mobileLayout
+      ? MOBILE_HALL.floorEntrance
+      : { x: FLOOR_ENTRANCE_CENTER_X, y: FLOOR_ENTRANCE_CENTER_Y };
+
+    this.wallWheel?.layout(toScreenX(wheel.x), toScreenY(wheel.y), this.backgroundScale);
 
     this.heart?.layout(
-      toScreenX(PEDESTAL_CENTER_X),
-      toScreenY(PEDESTAL_CENTER_Y),
+      toScreenX(pedestal.x),
+      toScreenY(pedestal.y),
       this.backgroundScale,
     );
 
@@ -600,19 +578,19 @@ export default class CentralHallScene extends Phaser.Scene {
       scale: this.backgroundScale,
     });
 
-    this.statue?.layout(toScreenX(STATUE_CENTER_X), toScreenY(STATUE_BASE_Y), this.backgroundScale);
+    this.statue?.layout(toScreenX(statue.x), toScreenY(statue.baseY), this.backgroundScale);
 
     // Shares the statue's floor anchor so the opening stays centered in
     // the same niche at any window size.
-    this.entrance?.layout(toScreenX(STATUE_CENTER_X), toScreenY(STATUE_BASE_Y), this.backgroundScale);
+    this.entrance?.layout(toScreenX(statue.x), toScreenY(statue.baseY), this.backgroundScale);
 
-    this.handle?.layout(toScreenX(HANDLE_CENTER_X), toScreenY(HANDLE_CENTER_Y), this.backgroundScale);
+    this.handle?.layout(toScreenX(handle.x), toScreenY(handle.y), this.backgroundScale);
 
-    this.pot?.layout(toScreenX(POT_BASE_X), toScreenY(POT_BASE_Y), this.backgroundScale);
+    this.pot?.layout(toScreenX(pot.x), toScreenY(pot.baseY), this.backgroundScale);
 
     this.floorEntrance?.layout(
-      toScreenX(FLOOR_ENTRANCE_CENTER_X),
-      toScreenY(FLOOR_ENTRANCE_CENTER_Y),
+      toScreenX(floorEntrance.x),
+      toScreenY(floorEntrance.y),
       this.backgroundScale,
     );
 
