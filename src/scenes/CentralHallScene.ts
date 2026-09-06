@@ -14,7 +14,6 @@ import IntroOverlay from '../game/IntroOverlay';
 import CrystalHolder from '../game/CrystalHolder';
 import WallWheel from '../game/WallWheel';
 import MobilePinchZoom from '../game/MobilePinchZoom';
-import MobilePanoramaNav from '../game/MobilePanoramaNav';
 import FixedUiCamera from '../game/FixedUiCamera';
 import CrystalPlacementMode from '../game/CrystalPlacementMode';
 import HintSystem from '../game/HintSystem';
@@ -160,12 +159,12 @@ const WALL_WHEEL_WIDTH_BG = 185;
 // every original constant above unchanged.
 const MOBILE_HALL = {
   pedestal: { x: 935, y: 565 },
-  statue: { x: 175, baseY: 515, heightBg: 360 },
+  statue: { x: 420, baseY: 515, heightBg: 360 },
   entrance: { widthBg: 155, heightBg: 315 },
-  pot: { x: 330, baseY: 535, heightBg: 125 },
-  handle: { x: 265, y: 455, widthBg: 64 },
+  pot: { x: 500, baseY: 535, heightBg: 125 },
+  handle: { x: 475, y: 455, widthBg: 64 },
   wheel: { x: 1182, y: 215, widthBg: 205 },
-  floorEntrance: { x: 1515, y: 700, widthBg: 210 },
+  floorEntrance: { x: 1260, y: 700, widthBg: 210 },
 } as const;
 
 const WHEEL_ENTRY_DURATION_MS = 850;
@@ -186,7 +185,6 @@ export default class CentralHallScene extends Phaser.Scene {
   private crystalHolder?: CrystalHolder;
   private wallWheel?: WallWheel;
   private pinchZoom?: MobilePinchZoom;
-  private panoramaNav?: MobilePanoramaNav;
   private fixedUiCamera?: FixedUiCamera;
   private crystalPlacementMode?: CrystalPlacementMode;
   private hintSystem?: HintSystem;
@@ -298,13 +296,10 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.setDimmed(true);
     }
 
-    // The dedicated mobile build is one continuous panoramic hall. Edge
-    // arrows move across it horizontally without exposing destination
-    // names; desktop keeps its existing interaction unchanged.
-    if (this.mobileLayout) {
-      this.panoramaNav = new MobilePanoramaNav(this);
-      this.panoramaNav.create();
-    } else {
+    // Mobile uses a single fixed composition: every discovery target is
+    // positioned inside the visible frame, so no pinch or panorama
+    // controls are needed. Desktop keeps its existing pinch interaction.
+    if (!this.mobileLayout) {
       this.pinchZoom = new MobilePinchZoom(this);
       this.pinchZoom.create();
     }
@@ -407,7 +402,6 @@ export default class CentralHallScene extends Phaser.Scene {
       this.heart.setSuppressed(true);
       this.pot.setActive(false);
       this.pinchZoom?.disable();
-      this.panoramaNav?.disable();
 
       this.intro = new IntroOverlay(this);
       this.intro.create();
@@ -416,11 +410,10 @@ export default class CentralHallScene extends Phaser.Scene {
         this.heart?.setSuppressed(false);
         this.pot?.setActive(true);
         this.pinchZoom?.enable();
-        this.panoramaNav?.enable();
       };
     }
 
-    // Panorama navigation and pinch gestures move the world camera. Phaser's
+    // Room transitions and desktop pinch gestures move the world camera. Phaser's
     // scrollFactor(0) alone does not opt UI out of that zoom, so route all
     // fixed UI through a stable second camera before the first layout can
     // focus a hotspot.
@@ -460,7 +453,6 @@ export default class CentralHallScene extends Phaser.Scene {
       this.crystalHolder?.destroy();
       this.wallWheel?.destroy();
       this.pinchZoom?.destroy();
-      this.panoramaNav?.destroy();
       this.fixedUiCamera?.destroy();
       this.crystalPlacementMode?.destroy();
       this.hintSystem?.destroy();
@@ -529,19 +521,6 @@ export default class CentralHallScene extends Phaser.Scene {
         toScreenY(this.background.height) - toScreenY(0),
       ),
     );
-
-    if (this.panoramaNav) {
-      const worldLeft = toScreenX(0);
-      const worldTop = toScreenY(0);
-      const worldWidth = this.background.width * this.backgroundScale;
-      const worldHeight = this.background.height * this.backgroundScale;
-      this.cameras.main.setBounds(worldLeft, worldTop, worldWidth, worldHeight);
-      this.panoramaNav.setViewpoints([
-        { id: 'left', centerX: toScreenX(250) },
-        { id: 'center', centerX: toScreenX(MOBILE_HALL.pedestal.x) },
-        { id: 'right', centerX: toScreenX(1620) },
-      ]);
-    }
 
     this.overlay?.setSize(width, height);
 
