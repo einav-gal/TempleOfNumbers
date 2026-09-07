@@ -262,6 +262,7 @@ export default class HintSystem {
 
     const width = this.scene.scale.width;
     const height = this.scene.scale.height;
+    const mobile = isMobileDevice(this.scene);
 
     // Interactive (even with no listener of its own) so it actually
     // intercepts clicks at the Phaser hit-testing level, rather than
@@ -276,21 +277,21 @@ export default class HintSystem {
       .setOrigin(0, 0)
       .setInteractive();
 
-    const panelWidth = Math.min(width * 0.9, POPUP_PANEL_WIDTH_MAX_PX);
-    const panelHeight = POPUP_PANEL_HEIGHT_PX;
+    const panelWidth = Math.min(width * 0.92, mobile ? 900 : POPUP_PANEL_WIDTH_MAX_PX);
+    const panelHeight = mobile ? 350 : POPUP_PANEL_HEIGHT_PX;
     const backdrop = this.scene.add
       .rectangle(0, 0, panelWidth, panelHeight, 0x241f19, 0.96)
       .setStrokeStyle(2, 0xd6b270, 0.7);
 
     const label = createRtlText(this.scene, 0, -14, text, {
-      fontSize: `${POPUP_TEXT_FONT_PX}px`,
+      fontSize: `${mobile ? 44 : POPUP_TEXT_FONT_PX}px`,
       color: '#f2e9d8',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
     }).setOrigin(0.5);
 
     const closeHint = createRtlText(this.scene, 0, panelHeight / 2 - 32, CLOSE_HINT_TEXT, {
-      fontSize: `${POPUP_CLOSE_HINT_FONT_PX}px`,
+      fontSize: `${mobile ? 30 : POPUP_CLOSE_HINT_FONT_PX}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
 

@@ -344,17 +344,28 @@ export default class CentralHallScene extends Phaser.Scene {
     });
     this.statue.create(STATUE_DEPTH);
 
-    this.handle = new Handle(this, HANDLE_KEY, {
-      widthBg: this.mobileLayout ? MOBILE_HALL.handle.widthBg : HANDLE_WIDTH_BG,
-    });
-    this.handle.create(HANDLE_DEPTH);
-    this.handle.onActivate = () => this.openStatueEntrance();
+    // Desktop keeps the original pot -> handle -> statue sequence. On
+    // mobile the handle is deliberately omitted: once the pot falls, the
+    // statue opens directly, reducing a tiny and unnecessary touch target.
+    if (!this.mobileLayout) {
+      this.handle = new Handle(this, HANDLE_KEY, { widthBg: HANDLE_WIDTH_BG });
+      this.handle.create(HANDLE_DEPTH);
+      this.handle.onActivate = () => this.openStatueEntrance();
+    } else {
+      this.handle = undefined;
+    }
 
     this.pot = new Pot(this, POT_KEY, {
       heightBg: this.mobileLayout ? MOBILE_HALL.pot.heightBg : POT_HEIGHT_BG,
     });
     this.pot.create(POT_DEPTH);
-    this.pot.onMoved = () => this.handle?.reveal();
+    this.pot.onMoved = () => {
+      if (this.mobileLayout) {
+        this.openStatueEntrance();
+      } else {
+        this.handle?.reveal();
+      }
+    };
 
     // If the player already completed the pot → lever → statue → entrance
     // sequence on a previous visit, jump straight to that end state
@@ -362,7 +373,7 @@ export default class CentralHallScene extends Phaser.Scene {
     // nothing flashes through its closed/default appearance first.
     if (isLeftStatuePassageOpen(this.registry)) {
       this.pot.restoreFallen();
-      this.handle.restoreActivated();
+      this.handle?.restoreActivated();
       this.statue.restoreOpen();
       this.entrance.restoreRevealed();
     }
@@ -626,12 +637,12 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart?.setSuppressed(true);
 
-    const panelWidth = Math.min(width * 0.85, 680);
-    const panelHeight = 210;
+    const panelWidth = Math.min(width * 0.9, this.mobileLayout ? 820 : 680);
+    const panelHeight = this.mobileLayout ? 270 : 210;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
     const message = createRtlText(this, 0, -12, POPUP_TEXT, {
-      fontSize: `${Math.max(22, Math.min(32, width * 0.024))}px`,
+      fontSize: `${this.mobileLayout ? 48 : Math.max(22, Math.min(32, width * 0.024))}px`,
       color: '#d9cfae',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
@@ -639,7 +650,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: '22px',
+      fontSize: `${this.mobileLayout ? 30 : 22}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);
@@ -679,12 +690,12 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart?.setSuppressed(true);
 
-    const panelWidth = Math.min(width * 0.85, 680);
-    const panelHeight = 210;
+    const panelWidth = Math.min(width * 0.9, this.mobileLayout ? 820 : 680);
+    const panelHeight = this.mobileLayout ? 270 : 210;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
     const message = createRtlText(this, 0, -12, FINAL_STAGE_POPUP_TEXT, {
-      fontSize: `${Math.max(22, Math.min(32, width * 0.024))}px`,
+      fontSize: `${this.mobileLayout ? 48 : Math.max(22, Math.min(32, width * 0.024))}px`,
       color: '#d9cfae',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
@@ -692,7 +703,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: '22px',
+      fontSize: `${this.mobileLayout ? 30 : 22}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);
@@ -744,9 +755,12 @@ export default class CentralHallScene extends Phaser.Scene {
 
     const width = this.scale.width;
     const height = this.scale.height;
-    const frameBaseX = this.toScreenX(STATUE_CENTER_X, width);
-    const frameBaseY = this.toScreenY(STATUE_BASE_Y, height);
-    const frameWidthScreen = ENTRANCE_SIZE.widthBg * this.backgroundScale;
+    const statueX = this.mobileLayout ? MOBILE_HALL.statue.x : STATUE_CENTER_X;
+    const statueBaseY = this.mobileLayout ? MOBILE_HALL.statue.baseY : STATUE_BASE_Y;
+    const entranceWidthBg = this.mobileLayout ? MOBILE_HALL.entrance.widthBg : ENTRANCE_SIZE.widthBg;
+    const frameBaseX = this.toScreenX(statueX, width);
+    const frameBaseY = this.toScreenY(statueBaseY, height);
+    const frameWidthScreen = entranceWidthBg * this.backgroundScale;
 
     const opening = this.entrance?.getOpeningBounds(frameBaseX, frameBaseY, this.backgroundScale);
     if (!opening) {
