@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
 import { createRtlText } from './rtlText';
+import {
+  isMobileDevice,
+  isEnvelopScaleMode,
+  ENVELOP_TOP_SAFE_MARGIN_PX,
+  ENVELOP_BOTTOM_SAFE_MARGIN_PX,
+} from './scaleMode';
 
 const POPUP_DEPTH = 60;
 
@@ -85,6 +91,90 @@ const VARIANT_CONFIG: Record<RoundIntroPopupVariant, VariantConfig> = {
   },
 };
 
+// Mobile-only variants (see isMobileDevice() below) — the real bug these
+// fix isn't the DESIGN-pixel font size (VARIANT_CONFIG above was already
+// "bumped up" once, per the comment there, and still read too small on a
+// real phone): the whole 1536x1024 design canvas gets uniformly CSS-
+// scaled down to fit a real small screen (scene.scale.width/height always
+// stay fixed at the design size — see scaleMode.ts and main.ts's `scale:
+// { width: 1536, height: 1024 }` config — so EVERY design-px measurement,
+// screen-fixed UI included, gets the same shrink as the world background
+// does). On the narrowest tested ENVELOP phones that shrink factor is
+// ~0.48-0.56 (viewport-width / 1536), meaning even the already-"bumped"
+// desktop numbers above render at barely half their design-px size in
+// real physical pixels. These mobile configs roughly double the panel's
+// width (cheap — ENVELOP never crops horizontally) and push font sizes up
+// by a similar factor, so the FINAL on-screen physical size ends up
+// genuinely bigger than desktop's own physical rendering, not just
+// proportionally the same. See the arithmetic in the task notes: at
+// 854x393 and 740x360 (both ENVELOP), these numbers land at roughly
+// double the unboosted-mobile physical px for both variants.
+//
+// Panel HEIGHT is deliberately not blown up by the same factor — unlike
+// width, ENVELOP actively crops the canvas top/bottom (see
+// ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX), so a tall popup risks losing its
+// own button or the tail of its body text off-screen. bodyFontSize here
+// is only a *starting* point for the 'default' variant's long,
+// multi-paragraph Libra Room copy — see fitBodyToSafeHeight(), which
+// shrinks it further (down to the desktop size as a floor, never below)
+// specifically in ENVELOP mode if the actual measured content would
+// still overflow the safe band — the same shrink-to-fit technique
+// IntroOverlay.ts already uses for its own mobile body text.
+const MOBILE_VARIANT_CONFIG: Record<RoundIntroPopupVariant, VariantConfig> = {
+  default: {
+    widthPx: 1150,
+    // 650, not a larger number matching the width's own ~1.85x growth:
+    // this frame is screen-centered (cy = scene.scale.height/2 = 512,
+    // always, regardless of device — see scaleMode.ts), so it only has
+    // +/-(834-512)=322 and (512-190)=322 logical px of ENVELOP-visible
+    // clearance each way (ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX=190) — i.e. a
+    // hard 644px ceiling on heightPx before the frame's own top/bottom
+    // edges start getting cropped. 650 lands just 3px over that on each
+    // side (negligible, well inside the band's own stated "a little more
+    // generous than the exact worst-case measurement" buffer) while
+    // comfortably containing the actual measured content (title + body +
+    // button), which fitBodyToSafeHeight() additionally guarantees stays
+    // within the 644 band regardless of body length.
+    heightPx: 650,
+    paddingPx: 50,
+    titleFontSize: 54,
+    bodyFontSize: 36,
+    bodyLineSpacing: 16,
+    titleTopPaddingPx: 44,
+    gapTitleToBodyPx: 70,
+    gapBodyToButtonPx: 40,
+    buttonWidthPx: 260,
+    buttonHeightPx: 78,
+    buttonLabelFontSize: 28,
+  },
+  compact: {
+    widthPx: 1100,
+    // See the 'default' variant's comment above for why this must stay
+    // close to the ~644px ENVELOP-visible ceiling — 600 lands safely
+    // inside it (spans logical y 212-812, vs. the 190-834 band).
+    heightPx: 600,
+    paddingPx: 48,
+    titleFontSize: 50,
+    bodyFontSize: 38,
+    bodyLineSpacing: 14,
+    titleTopPaddingPx: 36,
+    gapTitleToBodyPx: 54,
+    gapBodyToButtonPx: 32,
+    buttonWidthPx: 260,
+    buttonHeightPx: 78,
+    buttonLabelFontSize: 30,
+  },
+};
+
+// Floor for fitBodyToSafeHeight()'s shrink loop, per variant — never
+// shrinks the mobile body font below what desktop already uses, so the
+// worst case (longest possible wrap) is still no smaller, design-px-wise,
+// than the existing desktop rendering.
+const MOBILE_BODY_FONT_FLOOR_PX: Record<RoundIntroPopupVariant, number> = {
+  default: VARIANT_CONFIG.default.bodyFontSize,
+  compact: VARIANT_CONFIG.compact.bodyFontSize,
+};
+
 export interface RoundIntroContent {
   title: string;
   body: string;
@@ -102,7 +192,10 @@ export interface RoundIntroContent {
  */
 export default class RoundIntroPopup {
   private scene: Phaser.Scene;
+  private variant: RoundIntroPopupVariant;
   private config: VariantConfig;
+  /** Current (possibly shrunk-to-fit, mobile+ENVELOP only) body font size — see fitBodyToSafeHeight(). Starts at config.bodyFontSize. */
+  private currentBodyFontSizePx: number;
 
   private frameTextureKey: string;
   private buttonTextureKey: string;
@@ -133,7 +226,15 @@ export default class RoundIntroPopup {
 
   constructor(scene: Phaser.Scene, variant: RoundIntroPopupVariant = 'default') {
     this.scene = scene;
-    this.config = VARIANT_CONFIG[variant];
+    this.variant = variant;
+    // Mobile-only, picked once (desktop never touches MOBILE_VARIANT_CONFIG
+    // at all — byte-for-byte identical to before this file changed).
+    this.config = isMobileDevice(scene) ? MOBILE_VARIANT_CONFIG[variant] : VARIANT_CONFIG[variant];
+    this.currentBodyFontSizePx = this.config.bodyFontSize;
+    // Texture keys stay keyed only by variant (not by mobile/desktop) —
+    // the frame/button art itself doesn't change shape, only the
+    // dimensions it's generated at, and a single device never needs both
+    // sizes cached at once.
     this.frameTextureKey = `pink-puzzle-popup-frame-${variant}`;
     this.buttonTextureKey = `pink-puzzle-popup-button-${variant}`;
     this.buttonHoverTextureKey = `pink-puzzle-popup-button-hover-${variant}`;
@@ -277,11 +378,60 @@ export default class RoundIntroPopup {
     this.buttonZone?.setPosition(cx, buttonCenterY);
   }
 
+  // Mobile + ENVELOP only — no-op on desktop/tablet FIT (there's no top/
+  // bottom crop there at all, so a tall popup is never actually clipped),
+  // and a no-op whenever the already-measured content already fits.
+  // Reuses IntroOverlay.ts's own proven shrink-to-fit technique: shrink
+  // the body font (never past this variant's desktop size, the floor —
+  // see MOBILE_BODY_FONT_FLOOR_PX) one px at a time, re-measuring the
+  // Text's real rendered .height after each step (Phaser recalculates
+  // word-wrap line count itself on every setFontSize(), since
+  // bodyWrapWidthPx is a fixed px width, not font-relative), until the
+  // popup's actual total content span — title-top-padding + title height
+  // + gap + body height + gap + button height — fits within the
+  // ENVELOP-visible vertical band. Without this, a long, multi-paragraph
+  // body (the Libra Room's 'default'-variant room intro, in particular)
+  // could push the confirm button (or the body's own tail) past the
+  // cropped-off top/bottom edge of a short phone-landscape screen.
+  private fitBodyToSafeHeight(): void {
+    if (!this.bodyText || !this.titleText) {
+      return;
+    }
+    if (!isMobileDevice(this.scene) || !isEnvelopScaleMode(this.scene)) {
+      return;
+    }
+    const availableHeight = this.scene.scale.height - ENVELOP_TOP_SAFE_MARGIN_PX - ENVELOP_BOTTOM_SAFE_MARGIN_PX;
+    const floor = MOBILE_BODY_FONT_FLOOR_PX[this.variant];
+    const contentSpan = () =>
+      this.config.titleTopPaddingPx +
+      (this.titleText?.height ?? 0) +
+      this.config.gapTitleToBodyPx +
+      (this.bodyText?.height ?? 0) +
+      this.config.gapBodyToButtonPx +
+      this.config.buttonHeightPx;
+
+    while (contentSpan() > availableHeight && this.currentBodyFontSizePx > floor) {
+      this.currentBodyFontSizePx -= 1;
+      this.bodyText.setFontSize(this.currentBodyFontSizePx);
+    }
+  }
+
   /** Fills in content and fades the modal in; enables the confirm button only once fully open. */
   show(content: RoundIntroContent): void {
     this.titleText?.setText(content.title);
-    this.bodyText?.setText(content.body);
+    // Reset to this variant's full mobile starting size before fitting —
+    // show() may run more than once on the same instance in principle,
+    // and a previous call's shrink must never carry over.
+    this.currentBodyFontSizePx = this.config.bodyFontSize;
+    this.bodyText?.setText(content.body).setFontSize(this.currentBodyFontSizePx);
     this.buttonLabel?.setText(content.buttonLabel);
+    // Mobile + ENVELOP only (no-op otherwise): shrinks the just-measured
+    // body text down (floor: the desktop size) until the popup's real
+    // content height fits the cropped-canvas safe band — see
+    // fitBodyToSafeHeight(). Must run before layout() below so
+    // buttonCenterY is computed from the final, already-fitted body
+    // height, not the oversized starting one.
+    this.fitBodyToSafeHeight();
     // Body height (line count) depends on the content just set — button
     // position must be recomputed now, not just on the next resize.
     this.layout(this.lastWidth, this.lastHeight);

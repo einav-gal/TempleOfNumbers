@@ -171,6 +171,27 @@ const WHEEL_ENTRY_DURATION_MS = 850;
 const WHEEL_ENTRY_FILL_FRACTION = 0.7;
 const WHEEL_ENTRY_MAX_ZOOM = 5;
 
+// Mobile's own cover formula (height / background.height, see layout())
+// already fills the logical canvas's full 1024px height with zero
+// vertical slack — unlike desktop's Math.max(...) cover formula, which
+// always overflows on at least one axis. In ENVELOP mode specifically
+// (short phone-landscape, see isEnvelopScaleMode()), that leaves two of
+// the mobile hall's hidden discovery targets partially cropped off by
+// the top/bottom safe margins: the wall wheel (anchored near the top of
+// the 1870x841 mobile composition) and the floor entrance (anchored
+// near the bottom). Shrinking the ENTIRE mobile composition — background
+// and every overlay, via this one shared backgroundScale — pulls both
+// back inside the ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX band simultaneously,
+// without touching their individual MOBILE_HALL coordinates (which would
+// desync each overlay from the art it's meant to sit on). The shrink only
+// ever eats into space ENVELOP was already cropping away, so nothing is
+// lost from the actually-visible band, and the background still overflows
+// the canvas width comfortably at this factor. Left at 1 (no-op) for
+// mobile FIT (e.g. the dedicated /mobile/ link, always FIT — see
+// scaleModeForViewport() in main.ts) and for desktop, which never takes
+// this branch at all.
+const MOBILE_ENVELOP_FIT_FACTOR = 0.75;
+
 export default class CentralHallScene extends Phaser.Scene {
   private background?: Phaser.GameObjects.Image;
   private heart?: HeartOfTheTemple;
@@ -514,7 +535,7 @@ export default class CentralHallScene extends Phaser.Scene {
     // resulting width is intentionally larger than the viewport and the
     // camera pans across it. Desktop retains the original cover formula.
     this.backgroundScale = this.mobileLayout
-      ? height / this.background.height
+      ? (height / this.background.height) * (isEnvelopScaleMode(this) ? MOBILE_ENVELOP_FIT_FACTOR : 1)
       : Math.max(width / this.background.width, height / this.background.height) *
         (isEnvelopScaleMode(this) ? ENVELOP_EXTRA_ZOOM_FACTOR : 1);
     this.background
@@ -637,12 +658,21 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart?.setSuppressed(true);
 
-    const panelWidth = Math.min(width * 0.9, this.mobileLayout ? 820 : 680);
-    const panelHeight = this.mobileLayout ? 270 : 210;
+    const panelWidth = Math.min(width * 0.9, this.mobileLayout ? 1000 : 680);
+    const panelHeight = this.mobileLayout ? 320 : 210;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
+    // Mobile font bumped well past the earlier 48px — at that size the
+    // physical on-screen text (after the whole 1536x1024 canvas's own
+    // CSS shrink on a real phone, ~0.48-0.56x at the narrowest tested
+    // ENVELOP widths) barely matched desktop's own physical size, let
+    // alone exceeded it. POPUP_TEXT/FINAL_STAGE_POPUP_TEXT are both short
+    // single-line messages, so the bigger font/panel here has no
+    // wrap-overflow risk, and — screen-centered, like every other popup
+    // in this project — only needs panelHeight/2 clearance each way,
+    // comfortably inside the ENVELOP-visible vertical band.
     const message = createRtlText(this, 0, -12, POPUP_TEXT, {
-      fontSize: `${this.mobileLayout ? 48 : Math.max(22, Math.min(32, width * 0.024))}px`,
+      fontSize: `${this.mobileLayout ? 70 : Math.max(22, Math.min(32, width * 0.024))}px`,
       color: '#d9cfae',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
@@ -650,7 +680,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: `${this.mobileLayout ? 30 : 22}px`,
+      fontSize: `${this.mobileLayout ? 42 : 22}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);
@@ -690,12 +720,12 @@ export default class CentralHallScene extends Phaser.Scene {
 
     this.heart?.setSuppressed(true);
 
-    const panelWidth = Math.min(width * 0.9, this.mobileLayout ? 820 : 680);
-    const panelHeight = this.mobileLayout ? 270 : 210;
+    const panelWidth = Math.min(width * 0.9, this.mobileLayout ? 1000 : 680);
+    const panelHeight = this.mobileLayout ? 320 : 210;
     this.popup.add(this.drawStonePanel(panelWidth, panelHeight));
 
     const message = createRtlText(this, 0, -12, FINAL_STAGE_POPUP_TEXT, {
-      fontSize: `${this.mobileLayout ? 48 : Math.max(22, Math.min(32, width * 0.024))}px`,
+      fontSize: `${this.mobileLayout ? 70 : Math.max(22, Math.min(32, width * 0.024))}px`,
       color: '#d9cfae',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
@@ -703,7 +733,7 @@ export default class CentralHallScene extends Phaser.Scene {
     this.popup.add(message);
 
     const hint = createRtlText(this, 0, panelHeight / 2 - 34, '— לחצו לסגירה —', {
-      fontSize: `${this.mobileLayout ? 30 : 22}px`,
+      fontSize: `${this.mobileLayout ? 42 : 22}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
     this.popup.add(hint);

@@ -5,7 +5,7 @@ import FeedbackPopup from './FeedbackPopup';
 import { createRtlText } from './rtlText';
 import { setPinkRoomState, setCrystalCollected } from './GameState';
 import { FONT_FAMILY } from './textStyle';
-import { isEnvelopScaleMode } from './scaleMode';
+import { isEnvelopScaleMode, isMobileDevice } from './scaleMode';
 import type CrystalHolder from './CrystalHolder';
 import {
   EQUIVALENCE_GROUPS,
@@ -145,6 +145,65 @@ const RING_BANDS: RingBand[] = [
 // same pointer position.
 const CRYSTAL_HIT_RADIUS_BG = 75;
 
+// Mobile-only ring-size boost: makes the three rings (and everything that
+// must stay in lockstep with their visual size — the marker, the
+// mechanism-wide hit zone, and the mechanism glow) genuinely bigger and
+// easier to grab with one finger, without touching desktop at all
+// (ringScaleBoost stays 1 there — see layout()).
+//
+// Deliberately kept small — much smaller than it looks like it should be
+// at first glance. The crop-overflow check has to happen entirely in
+// FIXED LOGICAL-canvas units (the same 1536x1024 space
+// ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX's 190/834 band is defined in), not in
+// real device pixels: `scene.scale.width/height` stay fixed at the
+// configured 1536x1024 in BOTH Phaser scale modes (confirmed directly
+// from Phaser's ScaleManager source — only RESIZE/EXPAND modes ever
+// mutate gameSize; FIT/ENVELOP only ever touch the separate, CSS-level
+// displaySize), so PinkRoomScene's own `backgroundScale` formula
+// (`Math.max(width/bg.width, height/bg.height) * (ENVELOP ?
+// ENVELOP_EXTRA_ZOOM_FACTOR : 1)`, with bg being the 1536x1024
+// Background_Room2.png — same size as the logical canvas) collapses to
+// exactly `Math.max(1, 1) * 1.12 = 1.12` in ENVELOP, REGARDLESS of the
+// real device's width (854 vs 740 vs anything else) — there is no
+// separate "854x393 case" vs "740x360 case" for this overflow check, only
+// one fixed ENVELOP case.
+//
+// Crystal anchor Y in logical units: toScreenY(560) = 512 + (560-512) *
+// 1.12 = 565.76. Outer ring's own screen radius = OUTER_RADII.outer(245)
+// * scale(1.12) * ringScaleBoost. At boost=1 (today, no change): radius =
+// 274.4, bottom edge = 565.76+274.4 = 840.16 — already ~6px past the 834
+// line (inside the margin's own stated "a little more generous than the
+// exact worst-case measurement" buffer, so not a new problem). At
+// boost=1.2 (an earlier, too-aggressive draft of this constant): radius
+// = 329.28, bottom edge = 895.04 — a real ~61px overflow, eating well
+// past that buffer. At the shipped 1.1: radius = 301.84, bottom edge =
+// 867.6 — ~34px overflow, still inside what the band's own "generous"
+// safety margin can plausibly absorb, while still giving every ring band
+// a genuine ~10% larger grab width than before. See
+// onMechanismPointerDown() for the matching distBg divisor, which MUST
+// use this same boosted value or hit-testing desyncs from the enlarged
+// visuals.
+const MOBILE_RING_SCALE_BOOST = 1.1;
+
+// A second, larger, and fully independent boost applied ONLY to each
+// ring's value-label Text objects (fractions/decimals/percents) — never
+// to the ring geometry/hit-zones above. Label font size plays no part in
+// hit-testing (RING_BANDS/distBg only ever look at radial distance) or in
+// the logical-unit crop-overflow check above (a Text object's own glyph
+// size doesn't move its container's position), so the actual on-screen
+// DIGITS can be enlarged well beyond what the ring geometry can safely
+// afford. Physical on-screen size (the actual thing that needs to be
+// readable) also depends on the SEPARATE, real-device-dependent canvas-
+// to-screen CSS compression (not the logical-unit scale above) — at the
+// two narrowest tested ENVELOP widths (854 and 740), that compression is
+// ~0.556 and ~0.482 respectively (realWidth/1536). Combined: a label
+// renders at 20(base) * 1.12(scale) * 1.1(ring boost) * 1.8(this boost) *
+// compression ~= 24.6px / 21.4px physical at 854/740 — genuinely larger
+// than the unboosted mobile case (~13.6px / 11.8px) and larger than
+// desktop's own physical rendering at a typical 1366x768 window
+// (20 * 1 * 0.75 ~= 15px).
+const MOBILE_RING_LABEL_SCALE_BOOST = 1.8;
+
 // Offsets from the crystal's own depth. PinkCrystal internally occupies
 // crystalDepth-2..crystalDepth+1 for its reflectedLight/glowBlob/image/
 // glint+sparkles — these offsets stay well clear of that range (see the
@@ -274,6 +333,39 @@ const PANEL_HEIGHT_BG = 166;
 // touches the rings/marker's own scale or hit-testing geometry.
 const ENVELOP_PANEL_SCALE = 0.55;
 const ENVELOP_PANEL_CENTER_OFFSET_Y_BG = -310;
+
+// Mobile-only text boost for the panel's title/instructionText —
+// completely independent of ENVELOP_PANEL_SCALE above (that one must stay
+// untouched: it's tuned together with ENVELOP_PANEL_CENTER_OFFSET_Y_BG to
+// keep the panel's FRAME clear of the top crop line, and multiplying it
+// further would re-break that). This instead decouples the TEXT's own
+// local fontSize from the panel's geometry, the same technique
+// MOBILE_RING_LABEL_SCALE_BOOST above uses to decouple ring-label size
+// from ring geometry.
+//
+// Deliberately capped much lower than every other mobile text boost in
+// this project, for a different reason than the rings: this is a
+// GEOMETRIC ceiling, not a crop-safety one, and it's independent of
+// ENVELOP_PANEL_SCALE entirely (that factor scales the title/instruction
+// text together with their offsets uniformly, so it never affects
+// whether they visually collide with each other — only their *local*
+// positions/sizes, both in the same bg-px coordinate space, matter here).
+// PANEL_TITLE_OFFSET_Y_BG(-48) and PANEL_INSTRUCTION_OFFSET_Y_BG(-20)
+// leave only a 28bg-px gap between the two Text origins; a title taller
+// than roughly 12 * boost (half its line-height) pushes past the
+// instruction line's own top edge. Solving
+// `-48 + 12*boost <= -20 - 9*boost` (9 = half a *single-line*
+// instruction's height at boost=1 — confirmed every actual
+// round.successMessage string in equivalenceData.ts stays on one line at
+// this wrap width up to boost ~1.8) gives boost <= ~1.33 before the two
+// start overlapping. 1.3 (ENVELOP) / 1.15 (non-ENVELOP, which doesn't
+// additionally suffer ENVELOP_PANEL_SCALE's 0.55 shrink, so needs less
+// help) stay safely under that ceiling. A bigger improvement here would
+// require also growing PANEL_HEIGHT_BG and the offsets together — out of
+// scope for this pass given how delicately ENVELOP_PANEL_CENTER_OFFSET_Y_BG
+// is already tuned against the crop line (see the comment above it).
+const MOBILE_PANEL_TEXT_ENVELOP_BOOST = 1.3;
+const MOBILE_PANEL_TEXT_NON_ENVELOP_BOOST = 1.15;
 // Moved down 20bg-px from the previous -68 (within the requested 18-30
 // range) — panel half-height is 83, so this now leaves ~35bg-px of
 // clearance above the title instead of ~15, comfortably clear of the
@@ -373,6 +465,12 @@ export default class EquivalencePuzzle {
   private centerX = 0;
   private centerY = 0;
   private scale = 1;
+  // scale * MOBILE_RING_SCALE_BOOST (1 on desktop) — see layout(). Only
+  // the ring container/marker/mechanism-zone/mechanism-glow sizing and
+  // onMechanismPointerDown()'s hit-testing use this; the crystal zone and
+  // crystal-code panel keep using the plain `scale` field above, exactly
+  // as before.
+  private ringScale = 1;
   private activeDragRingId: RingId | null = null;
   private roundReadyTimer?: Phaser.Time.TimerEvent;
 
@@ -460,17 +558,30 @@ export default class EquivalencePuzzle {
     this.centerY = baseY;
     this.scale = scale;
 
-    this.mechanismGlow?.setPosition(baseX, baseY).setDisplaySize(OUTER_RADII.outer * 2.3 * scale, OUTER_RADII.outer * 2.3 * scale);
+    const isMobile = isMobileDevice(this.scene);
+    const ringScaleBoost = isMobile ? MOBILE_RING_SCALE_BOOST : 1;
+    const ringLabelBoost = isMobile ? MOBILE_RING_LABEL_SCALE_BOOST : 1;
+    this.ringScale = scale * ringScaleBoost;
+
+    this.mechanismGlow
+      ?.setPosition(baseX, baseY)
+      .setDisplaySize(OUTER_RADII.outer * 2.3 * this.ringScale, OUTER_RADII.outer * 2.3 * this.ringScale);
 
     for (const ring of this.rings) {
-      ring.container.setPosition(baseX, baseY).setScale(scale);
+      ring.container.setPosition(baseX, baseY).setScale(this.ringScale);
       this.setRingAngle(ring, ring.angle);
+      // Independent of the container's own scale (same decoupling
+      // technique as the labels' counter-rotation below) — lets the
+      // digits grow bigger than the ring geometry itself safely can.
+      for (const label of ring.labels) {
+        label.setScale(ringLabelBoost);
+      }
     }
 
-    const mechanismRadiusScreen = (OUTER_RADII.outer + RING_OUTER_TOLERANCE_BG) * scale;
+    const mechanismRadiusScreen = (OUTER_RADII.outer + RING_OUTER_TOLERANCE_BG) * this.ringScale;
     this.mechanismZone?.setPosition(baseX, baseY).setSize(mechanismRadiusScreen * 2, mechanismRadiusScreen * 2);
 
-    this.marker?.setPosition(baseX, baseY - MARKER_OFFSET_Y_BG * scale).setScale(scale);
+    this.marker?.setPosition(baseX, baseY - MARKER_OFFSET_Y_BG * this.ringScale).setScale(this.ringScale);
 
     const crystalRadiusScreen = CRYSTAL_HIT_RADIUS_BG * scale;
     this.crystalZone?.setPosition(baseX, baseY).setSize(crystalRadiusScreen * 2, crystalRadiusScreen * 2);
@@ -698,8 +809,18 @@ export default class EquivalencePuzzle {
     // Stronger warm-ivory tone (was a dimmer tan) plus moved-down offset
     // (PANEL_TITLE_OFFSET_Y_BG) — "increase contrast or brightness" and
     // clear the frame's top border.
+    // Picked once, at panel-creation time (same convention the ring
+    // labels' own fixed '20px' style already uses — only the container's
+    // scale updates per layout() call, never this base font size).
+    const isMobile = isMobileDevice(this.scene);
+    const textBoost = isMobile
+      ? isEnvelopScaleMode(this.scene)
+        ? MOBILE_PANEL_TEXT_ENVELOP_BOOST
+        : MOBILE_PANEL_TEXT_NON_ENVELOP_BOOST
+      : 1;
+
     const title = createRtlText(this.scene, 0, PANEL_TITLE_OFFSET_Y_BG, 'קוד הגביש', {
-      fontSize: '20px',
+      fontSize: `${20 * textBoost}px`,
       color: '#ffedd2',
     }).setOrigin(0.5);
     container.add(title);
@@ -707,7 +828,7 @@ export default class EquivalencePuzzle {
     // Shows correct/duplicate/incorrect feedback and each round's
     // success message — blank at rest.
     this.instructionText = createRtlText(this.scene, 0, PANEL_INSTRUCTION_OFFSET_Y_BG, '', {
-      fontSize: '15px',
+      fontSize: `${15 * textBoost}px`,
       wordWrap: { width: PANEL_INSTRUCTION_WRAP_WIDTH_BG, useAdvancedWrap: true },
       color: '#f5d9b8',
     }).setOrigin(0.5);
@@ -777,7 +898,10 @@ export default class EquivalencePuzzle {
     // camera is zoomed/panned (see MobilePinchZoom).
     const dx = pointer.worldX - this.centerX;
     const dy = pointer.worldY - this.centerY;
-    const distBg = Math.sqrt(dx * dx + dy * dy) / this.scale;
+    // Divide by the SAME boosted ringScale the visuals use (not the plain
+    // scale field) — otherwise hit-testing would desync from the now-
+    // larger rings on mobile.
+    const distBg = Math.sqrt(dx * dx + dy * dy) / this.ringScale;
 
     const band = RING_BANDS.find((b) => distBg >= b.minBg && distBg <= b.maxBg);
     if (!band) {
@@ -1535,7 +1659,11 @@ export default class EquivalencePuzzle {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth((this.outerRing?.container.depth ?? 0) + 1)
       .setAlpha(0.75)
-      .setDisplaySize(OUTER_RADII.inner * 2 * this.scale, OUTER_RADII.inner * 2 * this.scale);
+      // Uses ringScale (not the plain scale field) so this "travels
+      // through the mechanism" pulse still visually reaches the rings'
+      // own (possibly boosted) edges on mobile, rather than finishing
+      // short of them.
+      .setDisplaySize(OUTER_RADII.inner * 2 * this.ringScale, OUTER_RADII.inner * 2 * this.ringScale);
 
     this.scene.tweens.add({
       targets: this.pulseSprite,
@@ -1547,7 +1675,7 @@ export default class EquivalencePuzzle {
           return;
         }
         const t = tween.progress;
-        const size = Phaser.Math.Linear(OUTER_RADII.inner * 2, OUTER_RADII.outer * 2.6, t) * this.scale;
+        const size = Phaser.Math.Linear(OUTER_RADII.inner * 2, OUTER_RADII.outer * 2.6, t) * this.ringScale;
         this.pulseSprite.setDisplaySize(size, size);
       },
       onComplete: () => {

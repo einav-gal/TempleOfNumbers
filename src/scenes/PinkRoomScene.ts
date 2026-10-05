@@ -191,7 +191,13 @@ export default class PinkRoomScene extends Phaser.Scene {
     }
     this.puzzle = new EquivalencePuzzle(this, this.crystal);
     this.puzzle.create(CRYSTAL_DEPTH);
-    this.puzzle.onComplete = () => this.exit?.setActive(true);
+    this.puzzle.onComplete = () => {
+      this.exit?.setActive(true);
+      // "Make it obvious the doorway must now be clicked" — same pattern
+      // as LibraRoomScene's own exit; stops itself the instant the player
+      // actually clicks it (see Doorway.ts).
+      this.exit?.startAttentionPulse();
+    };
 
     if (getPinkRoomState(this.registry).completed) {
       this.puzzle.restoreCompleted();
@@ -207,7 +213,13 @@ export default class PinkRoomScene extends Phaser.Scene {
   private createExitToCentralHall(): void {
     this.exit = new Doorway(this, EXIT_SIZE);
     this.exit.create();
-    this.exit.setActive(getPinkRoomState(this.registry).completed);
+    const completed = getPinkRoomState(this.registry).completed;
+    this.exit.setActive(completed);
+    if (completed) {
+      // "On re-entry after completion, the doorway must already be
+      // unlocked and glowing" — same as LibraRoomScene's own exit.
+      this.exit.startAttentionPulse();
+    }
     this.exit.onActivate = () => this.returnToCentralHall();
   }
 

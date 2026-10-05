@@ -4,6 +4,48 @@ import { createRtlText } from './rtlText';
 import { FONT_FAMILY } from './textStyle';
 import { isRoom3PuzzleSolved, setRoom3PuzzleSolved, setCrystalCollected } from './GameState';
 import { isEnvelopScaleMode, ENVELOP_TOP_SAFE_MARGIN_PX, isMobileDevice } from './scaleMode';
+
+// Mobile-only text sizing (see the `mobile*` getters on the class below) —
+// same root cause/fix as every other popup in this project: the whole
+// 1536x1024 design canvas gets uniformly CSS-scaled down to fit a real
+// phone screen (roughly 0.48-0.56x at the narrowest tested ENVELOP
+// widths, vs. ~0.75x for a typical 1366x768 desktop FIT window), so a
+// "fixed screen px" font (the comment above TITLE_FONT_PX calls this out
+// as deliberate, to stay independent of the map's own internal coordinate
+// space) still isn't independent of THIS outer, whole-canvas shrink.
+// TITLE_FONT_MOBILE_PX is kept modest (50, not ~1.8x) specifically so it
+// still fits inside the existing fixed TITLE_STRIP_HEIGHT_PX (64) — this
+// title strip's height also determines how much vertical budget is left
+// for the map image itself (see layout()'s imageMaxHeight), and the map
+// is already visibly smaller on mobile than on desktop (ENVELOP's safe
+// area is shorter, not just narrower), so growing the strip further would
+// shrink the map more to compensate — not a trade worth making for a
+// title that's already comfortably legible at 50px.
+const TITLE_FONT_MOBILE_PX = 50;
+
+// The feedback overlay's frame/offsets are fixed anchors (not derived
+// from measured content, unlike RoundIntroPopup's body), so its mobile
+// sizes grow the frame/gaps together with the fonts to avoid the title
+// and sub-line visually crowding each other.
+const FEEDBACK_WIDTH_MOBILE_PX = 640;
+const FEEDBACK_HEIGHT_MOBILE_PX = 340;
+const FEEDBACK_ICON_OFFSET_Y_MOBILE_PX = -86;
+const FEEDBACK_ICON_FONT_MOBILE_PX = 96;
+const FEEDBACK_TITLE_OFFSET_Y_MOBILE_PX = 24;
+const FEEDBACK_TITLE_FONT_MOBILE_PX = 54;
+const FEEDBACK_TITLE_MIN_FONT_MOBILE_PX = 40;
+const FEEDBACK_SUB_OFFSET_Y_MOBILE_PX = 100;
+const FEEDBACK_SUB_FONT_MOBILE_PX = 36;
+
+const CODE_BANNER_WIDTH_MOBILE_PX = 460;
+const CODE_BANNER_HEIGHT_MOBILE_PX = 170;
+const CODE_BANNER_TITLE_OFFSET_Y_MOBILE_PX = -56;
+const CODE_BANNER_TITLE_FONT_MOBILE_PX = 28;
+const CODE_BANNER_SLOT_ROW_OFFSET_Y_MOBILE_PX = 32;
+const CODE_BANNER_SLOT_SIZE_MOBILE_PX = 60;
+const CODE_BANNER_SLOT_SPACING_MOBILE_PX = 120;
+const CODE_BANNER_SLOT_FONT_MOBILE_PX = 34;
+const CODE_REVEAL_FONT_MOBILE_PX = 100;
 import type CrystalHolder from './CrystalHolder';
 
 /**
@@ -196,7 +238,6 @@ const FEEDBACK_ICON_OFFSET_Y_PX = -66;
 const FEEDBACK_ICON_FONT_PX = 76;
 const FEEDBACK_TITLE_OFFSET_Y_PX = 20;
 const FEEDBACK_TITLE_FONT_PX = 40; // within the requested 36-44px range
-const FEEDBACK_TITLE_MAX_WIDTH_PX = FEEDBACK_WIDTH_PX - 60;
 const FEEDBACK_TITLE_MIN_FONT_PX = 30;
 const FEEDBACK_SUB_OFFSET_Y_PX = 78;
 const FEEDBACK_SUB_FONT_PX = 28;
@@ -349,9 +390,78 @@ export default class MapFractionPuzzle {
   private currentQuestionIndex = 0;
   private correctCount = 0;
 
+  /** Picked once (desktop never touches any mobile-sized constant/getter below — byte-for-byte identical to before these existed). */
+  private isMobile: boolean;
+
   constructor(config: MapFractionPuzzleConfig) {
     this.scene = config.scene;
     this.config = config;
+    this.isMobile = isMobileDevice(config.scene);
+  }
+
+  // ---- mobile-aware text/panel sizing getters --------------------------
+  // See the MOBILE_*/`*_MOBILE_PX` constants near the top of this file for
+  // why these are needed at all (the whole-canvas CSS shrink on a real
+  // phone, same root cause as every other popup in this project).
+  private get titleFontPx(): number {
+    return this.isMobile ? TITLE_FONT_MOBILE_PX : TITLE_FONT_PX;
+  }
+  private get feedbackWidthPx(): number {
+    return this.isMobile ? FEEDBACK_WIDTH_MOBILE_PX : FEEDBACK_WIDTH_PX;
+  }
+  private get feedbackHeightPx(): number {
+    return this.isMobile ? FEEDBACK_HEIGHT_MOBILE_PX : FEEDBACK_HEIGHT_PX;
+  }
+  private get feedbackIconOffsetYPx(): number {
+    return this.isMobile ? FEEDBACK_ICON_OFFSET_Y_MOBILE_PX : FEEDBACK_ICON_OFFSET_Y_PX;
+  }
+  private get feedbackIconFontPx(): number {
+    return this.isMobile ? FEEDBACK_ICON_FONT_MOBILE_PX : FEEDBACK_ICON_FONT_PX;
+  }
+  private get feedbackTitleOffsetYPx(): number {
+    return this.isMobile ? FEEDBACK_TITLE_OFFSET_Y_MOBILE_PX : FEEDBACK_TITLE_OFFSET_Y_PX;
+  }
+  private get feedbackTitleFontPx(): number {
+    return this.isMobile ? FEEDBACK_TITLE_FONT_MOBILE_PX : FEEDBACK_TITLE_FONT_PX;
+  }
+  private get feedbackTitleMaxWidthPx(): number {
+    return this.feedbackWidthPx - 60;
+  }
+  private get feedbackTitleMinFontPx(): number {
+    return this.isMobile ? FEEDBACK_TITLE_MIN_FONT_MOBILE_PX : FEEDBACK_TITLE_MIN_FONT_PX;
+  }
+  private get feedbackSubOffsetYPx(): number {
+    return this.isMobile ? FEEDBACK_SUB_OFFSET_Y_MOBILE_PX : FEEDBACK_SUB_OFFSET_Y_PX;
+  }
+  private get feedbackSubFontPx(): number {
+    return this.isMobile ? FEEDBACK_SUB_FONT_MOBILE_PX : FEEDBACK_SUB_FONT_PX;
+  }
+  private get codeBannerWidthPx(): number {
+    return this.isMobile ? CODE_BANNER_WIDTH_MOBILE_PX : CODE_BANNER_WIDTH_PX;
+  }
+  private get codeBannerHeightPx(): number {
+    return this.isMobile ? CODE_BANNER_HEIGHT_MOBILE_PX : CODE_BANNER_HEIGHT_PX;
+  }
+  private get codeBannerTitleOffsetYPx(): number {
+    return this.isMobile ? CODE_BANNER_TITLE_OFFSET_Y_MOBILE_PX : CODE_BANNER_TITLE_OFFSET_Y_PX;
+  }
+  private get codeBannerTitleFontPx(): number {
+    return this.isMobile ? CODE_BANNER_TITLE_FONT_MOBILE_PX : CODE_BANNER_TITLE_FONT_PX;
+  }
+  private get codeBannerSlotRowOffsetYPx(): number {
+    return this.isMobile ? CODE_BANNER_SLOT_ROW_OFFSET_Y_MOBILE_PX : CODE_BANNER_SLOT_ROW_OFFSET_Y_PX;
+  }
+  private get codeBannerSlotSizePx(): number {
+    return this.isMobile ? CODE_BANNER_SLOT_SIZE_MOBILE_PX : CODE_BANNER_SLOT_SIZE_PX;
+  }
+  private get codeBannerSlotSpacingPx(): number {
+    return this.isMobile ? CODE_BANNER_SLOT_SPACING_MOBILE_PX : CODE_BANNER_SLOT_SPACING_PX;
+  }
+  private get codeBannerSlotFontPx(): number {
+    return this.isMobile ? CODE_BANNER_SLOT_FONT_MOBILE_PX : CODE_BANNER_SLOT_FONT_SIZE_PX;
+  }
+  private get codeRevealFontPx(): number {
+    return this.isMobile ? CODE_REVEAL_FONT_MOBILE_PX : CODE_REVEAL_FONT_PX;
   }
 
   static preload(scene: Phaser.Scene): void {
@@ -395,7 +505,7 @@ export default class MapFractionPuzzle {
     titleContainer.add(titlePlate);
     this.titlePlate = titlePlate;
     this.titleText = createRtlText(this.scene, 0, 0, TITLE_TEXT, {
-      fontSize: `${TITLE_FONT_PX}px`,
+      fontSize: `${this.titleFontPx}px`,
       color: FRACTION_DIGIT_COLOR,
       align: 'center',
     }).setOrigin(0.5);
@@ -553,8 +663,8 @@ export default class MapFractionPuzzle {
     // banner never falls inside that cropped band.
     const bannerTopMargin = isEnvelopScaleMode(this.scene) ? ENVELOP_TOP_SAFE_MARGIN_PX : CODE_BANNER_TOP_MARGIN_PX;
     this.bannerContainer?.setPosition(
-      this.scene.scale.width - CODE_BANNER_RIGHT_MARGIN_PX - CODE_BANNER_WIDTH_PX / 2,
-      bannerTopMargin + CODE_BANNER_HEIGHT_PX / 2,
+      this.scene.scale.width - CODE_BANNER_RIGHT_MARGIN_PX - this.codeBannerWidthPx / 2,
+      bannerTopMargin + this.codeBannerHeightPx / 2,
     );
   }
 
@@ -794,7 +904,7 @@ export default class MapFractionPuzzle {
 
     this.feedbackGlow = this.scene.add
       .image(0, 0, SOFT_GLOW_TEXTURE_KEY)
-      .setDisplaySize(FEEDBACK_WIDTH_PX * 1.3, FEEDBACK_HEIGHT_PX * 1.3)
+      .setDisplaySize(this.feedbackWidthPx * 1.3, this.feedbackHeightPx * 1.3)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0)
       .setVisible(false);
@@ -806,16 +916,16 @@ export default class MapFractionPuzzle {
       .setVisible(false);
 
     this.feedbackIconText = this.scene.add
-      .text(0, FEEDBACK_ICON_OFFSET_Y_PX, '', {
+      .text(0, this.feedbackIconOffsetYPx, '', {
         fontFamily: FONT_FAMILY,
-        fontSize: `${FEEDBACK_ICON_FONT_PX}px`,
+        fontSize: `${this.feedbackIconFontPx}px`,
       })
       .setOrigin(0.5)
       .setAlpha(0)
       .setVisible(false);
 
-    this.feedbackTitleText = createRtlText(this.scene, 0, FEEDBACK_TITLE_OFFSET_Y_PX, '', {
-      fontSize: `${FEEDBACK_TITLE_FONT_PX}px`,
+    this.feedbackTitleText = createRtlText(this.scene, 0, this.feedbackTitleOffsetYPx, '', {
+      fontSize: `${this.feedbackTitleFontPx}px`,
       color: BRIGHT_CORRECT_CSS,
       stroke: '#2a1508',
       strokeThickness: 4,
@@ -825,8 +935,8 @@ export default class MapFractionPuzzle {
       .setAlpha(0)
       .setVisible(false);
 
-    this.feedbackSubText = createRtlText(this.scene, 0, FEEDBACK_SUB_OFFSET_Y_PX, '', {
-      fontSize: `${FEEDBACK_SUB_FONT_PX}px`,
+    this.feedbackSubText = createRtlText(this.scene, 0, this.feedbackSubOffsetYPx, '', {
+      fontSize: `${this.feedbackSubFontPx}px`,
       color: '#e9ddc9',
       align: 'center',
     })
@@ -868,7 +978,7 @@ export default class MapFractionPuzzle {
     const brightColor = isWrong ? BRIGHT_WRONG_CSS : BRIGHT_CORRECT_CSS;
     this.feedbackGlow.setTint(color);
     this.feedbackIconText.setText(isWrong ? '✗' : '✓').setColor(brightColor);
-    this.feedbackTitleText.setText(title).setColor(brightColor).setFontSize(FEEDBACK_TITLE_FONT_PX);
+    this.feedbackTitleText.setText(title).setColor(brightColor).setFontSize(this.feedbackTitleFontPx);
     this.fitFeedbackTitle();
     this.feedbackSubText.setText(sub).setVisible(sub.length > 0);
 
@@ -918,8 +1028,8 @@ export default class MapFractionPuzzle {
     if (!this.feedbackTitleText) {
       return;
     }
-    let fontSize = FEEDBACK_TITLE_FONT_PX;
-    while (this.feedbackTitleText.width > FEEDBACK_TITLE_MAX_WIDTH_PX && fontSize > FEEDBACK_TITLE_MIN_FONT_PX) {
+    let fontSize = this.feedbackTitleFontPx;
+    while (this.feedbackTitleText.width > this.feedbackTitleMaxWidthPx && fontSize > this.feedbackTitleMinFontPx) {
       fontSize -= 1;
       this.feedbackTitleText.setFontSize(fontSize);
     }
@@ -933,8 +1043,8 @@ export default class MapFractionPuzzle {
     const frame = this.scene.add.image(0, 0, CODE_BANNER_FRAME_TEXTURE_KEY).setOrigin(0.5).setScrollFactor(0);
     container.add(frame);
 
-    const title = createRtlText(this.scene, 0, CODE_BANNER_TITLE_OFFSET_Y_PX, CODE_BANNER_TITLE_TEXT, {
-      fontSize: `${CODE_BANNER_TITLE_FONT_PX}px`,
+    const title = createRtlText(this.scene, 0, this.codeBannerTitleOffsetYPx, CODE_BANNER_TITLE_TEXT, {
+      fontSize: `${this.codeBannerTitleFontPx}px`,
       color: '#ffedd2',
       align: 'center',
     })
@@ -943,23 +1053,25 @@ export default class MapFractionPuzzle {
     container.add(title);
 
     const count = REQUIRED_CORRECT_ANSWERS;
-    const startOffsetX = -((count - 1) / 2) * CODE_BANNER_SLOT_SPACING_PX;
+    const slotSpacing = this.codeBannerSlotSpacingPx;
+    const slotRowOffsetY = this.codeBannerSlotRowOffsetYPx;
+    const startOffsetX = -((count - 1) / 2) * slotSpacing;
     for (let i = 0; i < count; i++) {
-      const offsetX = startOffsetX + i * CODE_BANNER_SLOT_SPACING_PX;
+      const offsetX = startOffsetX + i * slotSpacing;
       const glow = this.scene.add
-        .image(offsetX, CODE_BANNER_SLOT_ROW_OFFSET_Y_PX, SOFT_GLOW_TEXTURE_KEY)
+        .image(offsetX, slotRowOffsetY, SOFT_GLOW_TEXTURE_KEY)
         .setTint(0xffb6e6)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setDisplaySize(CODE_BANNER_SLOT_SIZE_PX * 1.8, CODE_BANNER_SLOT_SIZE_PX * 1.8)
+        .setDisplaySize(this.codeBannerSlotSizePx * 1.8, this.codeBannerSlotSizePx * 1.8)
         .setAlpha(0)
         .setScrollFactor(0);
       const frameImg = this.scene.add
-        .image(offsetX, CODE_BANNER_SLOT_ROW_OFFSET_Y_PX, CODE_BANNER_SLOT_TEXTURE_KEY)
+        .image(offsetX, slotRowOffsetY, CODE_BANNER_SLOT_TEXTURE_KEY)
         .setScrollFactor(0);
       const text = this.scene.add
-        .text(offsetX, CODE_BANNER_SLOT_ROW_OFFSET_Y_PX + CODE_BANNER_SLOT_DIGIT_Y_OFFSET_PX, '◇', {
+        .text(offsetX, slotRowOffsetY + CODE_BANNER_SLOT_DIGIT_Y_OFFSET_PX, '◇', {
           fontFamily: FONT_FAMILY,
-          fontSize: `${CODE_BANNER_SLOT_FONT_SIZE_PX}px`,
+          fontSize: `${this.codeBannerSlotFontPx}px`,
           color: '#d8b878',
         })
         .setOrigin(0.5)
@@ -999,7 +1111,7 @@ export default class MapFractionPuzzle {
     }
     return {
       x: this.bannerContainer.x + slot.offsetX,
-      y: this.bannerContainer.y + CODE_BANNER_SLOT_ROW_OFFSET_Y_PX,
+      y: this.bannerContainer.y + this.codeBannerSlotRowOffsetYPx,
     };
   }
 
@@ -1025,12 +1137,12 @@ export default class MapFractionPuzzle {
     reveal.text
       .setText(String(digit))
       .setPosition(start.x, start.y)
-      .setFontSize(CODE_REVEAL_FONT_PX)
+      .setFontSize(this.codeRevealFontPx)
       .setAlpha(0)
       .setVisible(true);
     reveal.glow
       .setPosition(start.x, start.y)
-      .setDisplaySize(CODE_REVEAL_FONT_PX * 1.6, CODE_REVEAL_FONT_PX * 1.6)
+      .setDisplaySize(this.codeRevealFontPx * 1.6, this.codeRevealFontPx * 1.6)
       .setAlpha(0)
       .setVisible(true);
 
@@ -1051,10 +1163,10 @@ export default class MapFractionPuzzle {
       return;
     }
     const target = this.bannerSlotScreenPosition(slotIndex);
-    const startFontSize = CODE_REVEAL_FONT_PX;
-    const endFontSize = CODE_BANNER_SLOT_FONT_SIZE_PX;
-    const startGlowSize = CODE_REVEAL_FONT_PX * 1.6;
-    const endGlowSize = CODE_BANNER_SLOT_SIZE_PX * 0.6;
+    const startFontSize = this.codeRevealFontPx;
+    const endFontSize = this.codeBannerSlotFontPx;
+    const startGlowSize = this.codeRevealFontPx * 1.6;
+    const endGlowSize = this.codeBannerSlotSizePx * 0.6;
 
     const progress = { t: 0 };
     reveal.tween?.stop();
@@ -1320,8 +1432,8 @@ export default class MapFractionPuzzle {
     if (this.scene.textures.exists(FEEDBACK_FRAME_TEXTURE_KEY)) {
       return;
     }
-    const w = FEEDBACK_WIDTH_PX;
-    const h = FEEDBACK_HEIGHT_PX;
+    const w = this.feedbackWidthPx;
+    const h = this.feedbackHeightPx;
     const canvas = this.scene.textures.createCanvas(FEEDBACK_FRAME_TEXTURE_KEY, w, h);
     if (!canvas) {
       return;
@@ -1380,8 +1492,8 @@ export default class MapFractionPuzzle {
     if (this.scene.textures.exists(CODE_BANNER_FRAME_TEXTURE_KEY)) {
       return;
     }
-    const w = CODE_BANNER_WIDTH_PX;
-    const h = CODE_BANNER_HEIGHT_PX;
+    const w = this.codeBannerWidthPx;
+    const h = this.codeBannerHeightPx;
     const canvas = this.scene.textures.createCanvas(CODE_BANNER_FRAME_TEXTURE_KEY, w, h);
     if (!canvas) {
       return;
@@ -1415,7 +1527,7 @@ export default class MapFractionPuzzle {
     if (this.scene.textures.exists(CODE_BANNER_SLOT_TEXTURE_KEY)) {
       return;
     }
-    const size = CODE_BANNER_SLOT_SIZE_PX;
+    const size = this.codeBannerSlotSizePx;
     const canvas = this.scene.textures.createCanvas(CODE_BANNER_SLOT_TEXTURE_KEY, size, size);
     if (!canvas) {
       return;

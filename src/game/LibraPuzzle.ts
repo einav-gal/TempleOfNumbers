@@ -4,6 +4,7 @@ import FeedbackPopup from './FeedbackPopup';
 import { createRtlText } from './rtlText';
 import { setLibraRoomState, setCrystalCollected } from './GameState';
 import { FONT_FAMILY } from './textStyle';
+import { isMobileDevice } from './scaleMode';
 import type CrystalHolder from './CrystalHolder';
 
 export interface LibraQuestion {
@@ -977,8 +978,18 @@ export default class LibraPuzzle {
     const frame = this.scene.add.image(0, 0, BANNER_FRAME_TEXTURE_KEY).setOrigin(0.5).setScrollFactor(0);
     container.add(frame);
 
+    // Mobile-only, lower priority than the 4 required rooms (this banner
+    // is Libra Room-specific) — a minimal, low-risk improvement: only the
+    // text itself grows, never BANNER_WIDTH_PX/SLOT_SPACING/SLOT_SIZE (the
+    // frame texture and 5-slot layout those drive are tuned together and
+    // risk visually overflowing the carved frame if resized without a
+    // fuller pass — out of scope here). Same root cause as every other
+    // popup in this project (the whole canvas's own CSS shrink on a real
+    // phone), so even just the font bump makes the title/digits genuinely
+    // more legible with no risk to the frame layout.
+    const mobile = isMobileDevice(this.scene);
     const title = createRtlText(this.scene, 0, BANNER_TITLE_OFFSET_Y_PX, 'תשובות האיזון', {
-      fontSize: '20px',
+      fontSize: `${mobile ? 28 : 20}px`,
       color: '#ffedd2',
       align: 'center',
     })
@@ -1008,7 +1019,11 @@ export default class LibraPuzzle {
       const text = this.scene.add
         .text(offsetX, BANNER_SLOT_ROW_OFFSET_Y_PX + BANNER_SLOT_DIGIT_Y_OFFSET_PX, '◇', {
           fontFamily: FONT_FAMILY,
-          fontSize: `${BANNER_SLOT_FONT_SIZE_PX}px`,
+          // Kept modest (26 vs desktop's 22) — the diamond slot's own
+          // drawable interior (generateBannerSlotTexture()) is only
+          // ~30x30px at BANNER_SLOT_SIZE_PX's current 46px, so a bigger
+          // digit risks visually overflowing the carved diamond edge.
+          fontSize: `${mobile ? 26 : BANNER_SLOT_FONT_SIZE_PX}px`,
           color: '#d8b878',
         })
         .setOrigin(0.5)

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createRtlText } from './rtlText';
+import { isMobileDevice } from './scaleMode';
 
 const FRAME_TEXTURE_KEY = 'pink-puzzle-feedback-frame';
 const HINT_FRAME_TEXTURE_KEY = 'pink-puzzle-feedback-frame-hint';
@@ -36,6 +37,41 @@ const HINT_BODY_WRAP_WIDTH_PX = HINT_WIDTH_PX - 50;
 const NORMAL_TITLE_MAX_WIDTH_PX = NORMAL_WIDTH_PX - 40;
 const HINT_TITLE_MAX_WIDTH_PX = HINT_WIDTH_PX - 40;
 const TITLE_MIN_FONT_SIZE_PX = 30;
+
+// Mobile-only (see isMobileDevice() below): same root cause/fix pattern
+// as RoundIntroPopup.ts — the whole 1536x1024 design canvas gets
+// uniformly CSS-scaled down to fit a real small phone screen (roughly
+// 0.48-0.56x at the narrowest tested ENVELOP viewports), so the already-
+// "bumped" desktop numbers above still render at barely half their
+// design-px size in real physical pixels on mobile. Both bodies here stay
+// single short lines regardless of device (see the comment above
+// NORMAL_WIDTH_PX), and even the larger ~1.7x panel sizes below stay
+// comfortably inside the ENVELOP-visible vertical band (644 logical px —
+// see ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX) with wide margin to spare, so —
+// unlike RoundIntroPopup's long-text 'default' variant — no runtime
+// shrink-to-fit safety net is needed here.
+const MOBILE_NORMAL_WIDTH_PX = 782;
+const MOBILE_NORMAL_HEIGHT_PX = 323;
+const MOBILE_NORMAL_TITLE_FONT_PX = 72;
+const MOBILE_NORMAL_BODY_FONT_PX = 50;
+const MOBILE_NORMAL_TITLE_OFFSET_Y_PX = -62;
+const MOBILE_NORMAL_BODY_OFFSET_Y_PX = 48;
+
+const MOBILE_HINT_WIDTH_PX = 629;
+const MOBILE_HINT_HEIGHT_PX = 247;
+const MOBILE_HINT_TITLE_FONT_PX = 46;
+const MOBILE_HINT_BODY_FONT_PX = 32;
+const MOBILE_HINT_TITLE_OFFSET_Y_PX = -48;
+const MOBILE_HINT_BODY_OFFSET_Y_PX = 32;
+
+const MOBILE_NORMAL_BODY_WRAP_WIDTH_PX = MOBILE_NORMAL_WIDTH_PX - 60;
+const MOBILE_HINT_BODY_WRAP_WIDTH_PX = MOBILE_HINT_WIDTH_PX - 50;
+const MOBILE_NORMAL_TITLE_MAX_WIDTH_PX = MOBILE_NORMAL_WIDTH_PX - 40;
+const MOBILE_HINT_TITLE_MAX_WIDTH_PX = MOBILE_HINT_WIDTH_PX - 40;
+// fitTitleToFrame()'s shrink floor on mobile — still well above the
+// desktop title size (42px), so even a worst-case shrunk mobile title
+// never renders smaller, design-px-wise, than desktop's unshrunk one.
+const MOBILE_TITLE_MIN_FONT_SIZE_PX = 50;
 
 const FADE_MS = 220;
 const PULSE_CYCLE_MS = 260;
@@ -78,6 +114,8 @@ const KIND_STYLES: Record<FeedbackKind, KindStyle> = {
  */
 export default class FeedbackPopup {
   private scene: Phaser.Scene;
+  /** Picked once (desktop never touches any MOBILE_* constant at all — byte-for-byte identical to before this file changed). */
+  private isMobile: boolean;
 
   private glow?: Phaser.GameObjects.Image;
   private frame?: Phaser.GameObjects.Image;
@@ -91,20 +129,78 @@ export default class FeedbackPopup {
   private hideTimer?: Phaser.Time.TimerEvent;
 
   private currentKind: FeedbackKind | null = null;
-  private activeTitleOffsetY = NORMAL_TITLE_OFFSET_Y_PX;
-  private activeBodyOffsetY = NORMAL_BODY_OFFSET_Y_PX;
+  private activeTitleOffsetY: number;
+  private activeBodyOffsetY: number;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.isMobile = isMobileDevice(scene);
+    this.activeTitleOffsetY = this.normalTitleOffsetYPx;
+    this.activeBodyOffsetY = this.normalBodyOffsetYPx;
   }
 
   get isOpen(): boolean {
     return this.currentKind !== null;
   }
 
+  // Each pair below picks this instance's desktop or mobile constant,
+  // decided once in the constructor (this.isMobile) — desktop paths are
+  // completely untouched (identical to before MOBILE_* existed).
+  private get normalWidthPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_WIDTH_PX : NORMAL_WIDTH_PX;
+  }
+  private get normalHeightPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_HEIGHT_PX : NORMAL_HEIGHT_PX;
+  }
+  private get normalTitleFontPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_TITLE_FONT_PX : NORMAL_TITLE_FONT_PX;
+  }
+  private get normalBodyFontPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_BODY_FONT_PX : NORMAL_BODY_FONT_PX;
+  }
+  private get normalTitleOffsetYPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_TITLE_OFFSET_Y_PX : NORMAL_TITLE_OFFSET_Y_PX;
+  }
+  private get normalBodyOffsetYPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_BODY_OFFSET_Y_PX : NORMAL_BODY_OFFSET_Y_PX;
+  }
+  private get normalBodyWrapWidthPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_BODY_WRAP_WIDTH_PX : NORMAL_BODY_WRAP_WIDTH_PX;
+  }
+  private get normalTitleMaxWidthPx(): number {
+    return this.isMobile ? MOBILE_NORMAL_TITLE_MAX_WIDTH_PX : NORMAL_TITLE_MAX_WIDTH_PX;
+  }
+  private get hintWidthPx(): number {
+    return this.isMobile ? MOBILE_HINT_WIDTH_PX : HINT_WIDTH_PX;
+  }
+  private get hintHeightPx(): number {
+    return this.isMobile ? MOBILE_HINT_HEIGHT_PX : HINT_HEIGHT_PX;
+  }
+  private get hintTitleFontPx(): number {
+    return this.isMobile ? MOBILE_HINT_TITLE_FONT_PX : HINT_TITLE_FONT_PX;
+  }
+  private get hintBodyFontPx(): number {
+    return this.isMobile ? MOBILE_HINT_BODY_FONT_PX : HINT_BODY_FONT_PX;
+  }
+  private get hintTitleOffsetYPx(): number {
+    return this.isMobile ? MOBILE_HINT_TITLE_OFFSET_Y_PX : HINT_TITLE_OFFSET_Y_PX;
+  }
+  private get hintBodyOffsetYPx(): number {
+    return this.isMobile ? MOBILE_HINT_BODY_OFFSET_Y_PX : HINT_BODY_OFFSET_Y_PX;
+  }
+  private get hintBodyWrapWidthPx(): number {
+    return this.isMobile ? MOBILE_HINT_BODY_WRAP_WIDTH_PX : HINT_BODY_WRAP_WIDTH_PX;
+  }
+  private get hintTitleMaxWidthPx(): number {
+    return this.isMobile ? MOBILE_HINT_TITLE_MAX_WIDTH_PX : HINT_TITLE_MAX_WIDTH_PX;
+  }
+  private get titleMinFontSizePx(): number {
+    return this.isMobile ? MOBILE_TITLE_MIN_FONT_SIZE_PX : TITLE_MIN_FONT_SIZE_PX;
+  }
+
   create(): void {
-    this.generateFrameTexture(FRAME_TEXTURE_KEY, NORMAL_WIDTH_PX, NORMAL_HEIGHT_PX);
-    this.generateFrameTexture(HINT_FRAME_TEXTURE_KEY, HINT_WIDTH_PX, HINT_HEIGHT_PX);
+    this.generateFrameTexture(FRAME_TEXTURE_KEY, this.normalWidthPx, this.normalHeightPx);
+    this.generateFrameTexture(HINT_FRAME_TEXTURE_KEY, this.hintWidthPx, this.hintHeightPx);
     this.generateGlowTexture();
 
     this.glow = this.scene.add
@@ -141,7 +237,7 @@ export default class FeedbackPopup {
     this.bodyText = createRtlText(this.scene, 0, 0, '', {
       color: '#e9ddc9',
       align: 'center',
-      wordWrap: { width: NORMAL_BODY_WRAP_WIDTH_PX, useAdvancedWrap: true },
+      wordWrap: { width: this.normalBodyWrapWidthPx, useAdvancedWrap: true },
     })
       .setOrigin(0.5)
       .setDepth(POPUP_DEPTH + 1)
@@ -179,20 +275,20 @@ export default class FeedbackPopup {
     const isHint = content.kind === 'hint';
     const style = KIND_STYLES[content.kind];
     const frameKey = isHint ? HINT_FRAME_TEXTURE_KEY : FRAME_TEXTURE_KEY;
-    const glowSize = (isHint ? HINT_WIDTH_PX : NORMAL_WIDTH_PX) * 1.3;
+    const glowSize = (isHint ? this.hintWidthPx : this.normalWidthPx) * 1.3;
 
     this.currentKind = content.kind;
-    this.activeTitleOffsetY = isHint ? HINT_TITLE_OFFSET_Y_PX : NORMAL_TITLE_OFFSET_Y_PX;
-    this.activeBodyOffsetY = isHint ? HINT_BODY_OFFSET_Y_PX : NORMAL_BODY_OFFSET_Y_PX;
+    this.activeTitleOffsetY = isHint ? this.hintTitleOffsetYPx : this.normalTitleOffsetYPx;
+    this.activeBodyOffsetY = isHint ? this.hintBodyOffsetYPx : this.normalBodyOffsetYPx;
 
     this.frame?.setTexture(frameKey);
     this.glow?.setTint(style.tint).setDisplaySize(glowSize, glowSize);
-    this.titleText?.setText(content.title).setFontSize(isHint ? HINT_TITLE_FONT_PX : NORMAL_TITLE_FONT_PX);
-    this.fitTitleToFrame(isHint ? HINT_TITLE_MAX_WIDTH_PX : NORMAL_TITLE_MAX_WIDTH_PX);
+    this.titleText?.setText(content.title).setFontSize(isHint ? this.hintTitleFontPx : this.normalTitleFontPx);
+    this.fitTitleToFrame(isHint ? this.hintTitleMaxWidthPx : this.normalTitleMaxWidthPx);
     this.bodyText
       ?.setText(content.body)
-      .setFontSize(isHint ? HINT_BODY_FONT_PX : NORMAL_BODY_FONT_PX)
-      .setWordWrapWidth(isHint ? HINT_BODY_WRAP_WIDTH_PX : NORMAL_BODY_WRAP_WIDTH_PX);
+      .setFontSize(isHint ? this.hintBodyFontPx : this.normalBodyFontPx)
+      .setWordWrapWidth(isHint ? this.hintBodyWrapWidthPx : this.normalBodyWrapWidthPx);
 
     this.layout(this.scene.scale.width, this.scene.scale.height);
 
@@ -266,8 +362,8 @@ export default class FeedbackPopup {
     }
     let fontSize = this.titleText.style.fontSize
       ? parseInt(String(this.titleText.style.fontSize), 10)
-      : NORMAL_TITLE_FONT_PX;
-    while (this.titleText.width > maxWidth && fontSize > TITLE_MIN_FONT_SIZE_PX) {
+      : this.normalTitleFontPx;
+    while (this.titleText.width > maxWidth && fontSize > this.titleMinFontSizePx) {
       fontSize -= 1;
       this.titleText.setFontSize(fontSize);
     }

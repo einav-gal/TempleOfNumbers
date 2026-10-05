@@ -277,21 +277,37 @@ export default class HintSystem {
       .setOrigin(0, 0)
       .setInteractive();
 
-    const panelWidth = Math.min(width * 0.92, mobile ? 900 : POPUP_PANEL_WIDTH_MAX_PX);
-    const panelHeight = mobile ? 350 : POPUP_PANEL_HEIGHT_PX;
+    // The earlier mobile numbers here (900/350/44/30) only bumped the
+    // design-pixel values by a modest ~1.3x — not enough once the whole
+    // 1536x1024 canvas's own CSS shrink on a real phone (roughly 0.48-
+    // 0.56x at the narrowest tested ENVELOP viewports, well below
+    // desktop's own ~0.75x at a typical laptop window) is accounted for:
+    // doing the arithmetic, that old 44px mobile label actually rendered
+    // SMALLER in real physical pixels than the 34px desktop one at the
+    // narrowest phone widths. These larger numbers (~1.9x the desktop
+    // values, not ~1.3x) correct that — physical size ends up genuinely
+    // bigger than desktop's own, not just proportionally the same — while
+    // the bigger 1100-wide/400-tall panel keeps even the longest guiding-
+    // question hint (~79 characters) comfortably within the ENVELOP-
+    // visible vertical band (this popup is always screen-centered, so it
+    // only needs panelHeight/2 of clearance each way — 200 logical px —
+    // well inside the 322px available above/below center; see
+    // ENVELOP_TOP/BOTTOM_SAFE_MARGIN_PX in scaleMode.ts).
+    const panelWidth = Math.min(width * 0.92, mobile ? 1100 : POPUP_PANEL_WIDTH_MAX_PX);
+    const panelHeight = mobile ? 400 : POPUP_PANEL_HEIGHT_PX;
     const backdrop = this.scene.add
       .rectangle(0, 0, panelWidth, panelHeight, 0x241f19, 0.96)
       .setStrokeStyle(2, 0xd6b270, 0.7);
 
     const label = createRtlText(this.scene, 0, -14, text, {
-      fontSize: `${mobile ? 44 : POPUP_TEXT_FONT_PX}px`,
+      fontSize: `${mobile ? 64 : POPUP_TEXT_FONT_PX}px`,
       color: '#f2e9d8',
       align: 'center',
       wordWrap: { width: panelWidth - 80 },
     }).setOrigin(0.5);
 
     const closeHint = createRtlText(this.scene, 0, panelHeight / 2 - 32, CLOSE_HINT_TEXT, {
-      fontSize: `${mobile ? 30 : POPUP_CLOSE_HINT_FONT_PX}px`,
+      fontSize: `${mobile ? 38 : POPUP_CLOSE_HINT_FONT_PX}px`,
       color: '#8a8068',
     }).setOrigin(0.5);
 
